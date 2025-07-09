@@ -1,0 +1,1 @@
+Taxes, but clearer. ClearTax lets you decide how your money supports society—because public funding should reflect public choice.
