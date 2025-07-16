@@ -11,17 +11,26 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install and Build React App
-        working-directory: ./client  # Key change
+        working-directory: ./client
         run: |
           npm install
           npm run build
 
-      - name: Upload files via FTP
+      - name: Verify Build Output
+        working-directory: ./client
+        run: ls -la build/
+
+      - name: Deploy to Production
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        env:
+          FTP_SERVER: ${{ vars.FTP_SERVER || secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ vars.FTP_USERNAME || secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ vars.FTP_PASSWORD || secrets.FTP_PASSWORD }}
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./client/build/  # React's build output
+          server: ${{ env.FTP_SERVER }}
+          username: ${{ env.FTP_USERNAME }}
+          password: ${{ env.FTP_PASSWORD }}
+          local-dir: ./client/build/
           server-dir: /public_html/cleartax/
           dangerous-clean-slate: false
+          protocol: ftps  # More secure than plain FTP
