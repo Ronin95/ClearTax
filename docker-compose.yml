@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: cleartax_nodejs
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - ./server:/app
       - /app/node_modules
@@ -26,7 +26,7 @@ services:
       dockerfile: Dockerfile
     container_name: cleartax_react
     ports:
-      - "3001:3000"
+      - "3002:3000"
     volumes:
       - ./client:/app
       - /app/node_modules

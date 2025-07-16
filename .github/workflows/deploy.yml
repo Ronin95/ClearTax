@@ -6,9 +6,17 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production  # Matches your GitHub environment
+    environment: production
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          npm install
+          npm run build
+
+      - name: Create dist directory
+        run: mkdir -p dist
 
       - name: Upload files via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -16,6 +24,6 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./dist/      # Only deploy built files
+          local-dir: ./client/build/  # React's build directory
           server-dir: /public_html/cleartax/
-          dangerous-clean-slate: true  # ⚠️ Deletes remote files not in local
+          dangerous-clean-slate: false  # Safer option
