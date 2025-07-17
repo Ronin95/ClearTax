@@ -30,3 +30,4 @@ jobs:
           server-dir: /public_html/cleartax/
           protocol: ftps
           dangerous-clean-slate: true
+          log-level: verbose
