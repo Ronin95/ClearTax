@@ -8,7 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: FTP_SERVER
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Install and Build React App
         working-directory: ./client
@@ -20,14 +21,16 @@ jobs:
         working-directory: ./client
         run: ls -la build/
 
-      - name: Deploy to nikolabadjevic.com
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      # --- This is the new deployment step ---
+      - name: Deploy with LFTP
+        uses: pontago/lftp-deploy-action@master
         with:
-          server: ${{ secrets.FTP_SERVER }}
+          host: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./client/build/
-          server-dir: /public_html/cleartax/
           protocol: ftps
-          dangerous-clean-slate: true
-          log-level: verbose
+          # The 'script' input gives us full control over the deployment
+          script: |
+            set ftp:ssl-force true
+            set ftp:ssl-protect-data true
+            mirror --delete --reverse --verbose ./client/build/ /public_html/cleartax/
