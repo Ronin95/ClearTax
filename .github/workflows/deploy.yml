@@ -22,15 +22,11 @@ jobs:
 
       - name: Deploy to nikolabadjevic.com
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        env:
-          FTP_SERVER: ${{ vars.FTP_SERVER || secrets.FTP_SERVER }}
-          FTP_USERNAME: ${{ vars.FTP_USERNAME || secrets.FTP_USERNAME }}
-          FTP_PASSWORD: ${{ vars.FTP_PASSWORD || secrets.FTP_PASSWORD }}
         with:
-          server: ${{ env.FTP_SERVER }}
-          username: ${{ env.FTP_USERNAME }}
-          password: ${{ env.FTP_PASSWORD }}
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./client/build/
           server-dir: /public_html/cleartax/
-          dangerous-clean-slate: true
           protocol: ftps
+          dangerous-clean-slate: true
