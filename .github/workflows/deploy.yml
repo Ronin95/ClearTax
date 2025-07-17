@@ -21,7 +21,6 @@ jobs:
         working-directory: ./client
         run: ls -la build/
 
-      # --- This is the new deployment step ---
       - name: Deploy with LFTP
         uses: pontago/lftp-deploy-action@master
         with:
@@ -29,8 +28,8 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
-          # The 'script' input gives us full control over the deployment
           script: |
             set ftp:ssl-force true
             set ftp:ssl-protect-data true
-            mirror --delete --reverse --verbose ./client/build/ /public_html/cleartax/
+            mirror --delete --reverse --verbose ./client/build/ /cleartax/
+            
