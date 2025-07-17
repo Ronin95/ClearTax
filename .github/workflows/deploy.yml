@@ -32,5 +32,5 @@ jobs:
           password: ${{ env.FTP_PASSWORD }}
           local-dir: ./client/build/
           server-dir: /public_html/cleartax/
-          dangerous-clean-slate: false
-          protocol: ftps  # More secure than plain FTP
+          dangerous-clean-slate: true
+          protocol: ftps
