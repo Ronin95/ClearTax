@@ -1,0 +1,37 @@
+name: Deploy Backend to VPS
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'server/**' # Only run this workflow if files in the 'server' folder change
+
+jobs:
+  deploy:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # Navigate to the project directory
+            cd ~/ClearTax
+            
+            # Pull the latest changes from the master branch
+            git pull origin master
+            
+            # Navigate to the backend folder
+            cd server
+            
+            # Install production dependencies
+            npm install --only=production
+            
+            # Restart the application with PM2 to apply changes
+            pm2 restart cleartax-backend
