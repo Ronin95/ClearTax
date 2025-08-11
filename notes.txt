@@ -1,0 +1,2 @@
+Access Database Docker Terminal:
+docker exec -it cleartax_postgres psql -U postgres -d cleartax

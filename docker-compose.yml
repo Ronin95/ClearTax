@@ -9,8 +9,8 @@ services:
     ports:
       - "3001:3000"
     volumes:
-      - ./server:/app
-      - /app/node_modules
+      - ./server/src:/app/src
+    command: npm run dev
     depends_on:
       cleartax_postgres:
         condition: service_healthy
@@ -19,6 +19,7 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
+      - JWT_SECRET=${JWT_SECRET}
 
   cleartax_react:  # React Frontend
     build:
@@ -64,8 +65,6 @@ services:
       - "5050:80"
     depends_on:
       - cleartax_postgres
-    extra_hosts:
-      - "cleartax_postgres:host-gateway"
 
 volumes:
   postgres_data:
