@@ -1,2 +1,6 @@
 Access Database Docker Terminal:
 docker exec -it cleartax_postgres psql -U postgres -d cleartax
+
+React Material UI
+https://mui.com/material-ui/react-avatar/
+https://mui.com/x/react-charts/label/
