@@ -4,3 +4,23 @@ docker exec -it cleartax_postgres psql -U postgres -d cleartax
 React Material UI
 https://mui.com/material-ui/react-avatar/
 https://mui.com/x/react-charts/label/
+
+
+server typescript:
+
+example:
+server/src/
+├── config/       # Move config.ts here
+├── controllers/  # Create logic for users (signup/login)
+├── middlewares/  # Add error handling or JWT verification
+├── routes/       # Define your API endpoints
+├── db.ts         # Your existing immudb logic
+└── index.ts      # Server entry point
+
+adapt later
+
+to access the logs of the docker images:
+docker compose logs cleartax_nodejs
+docker compose logs cleartax_react
+docker compose logs immudb
+

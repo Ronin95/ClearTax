@@ -122,17 +122,6 @@ function HomePage() {
       </section>
 
       <section className='reviews'>
-        <Avatar>H</Avatar>
-        <Stack spacing={2} direction="column">
-            <Typography className="hero-title" variant="h2" gutterBottom>
-                Welcome to ClearTax
-            </Typography>
-            <Typography className="hero-subtitle" variant="h3" gutterBottom>
-                ClearTax gives you control over how your tax money helps society. 
-                Don't rely on politicians to represent your interests - it's your money, 
-                you should decide how it's used and benefit society through your own actions!
-            </Typography>
-        </Stack>
       </section>
     </>
   );
