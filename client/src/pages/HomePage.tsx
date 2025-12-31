@@ -1,12 +1,9 @@
-// client/src/pages/HomePage.tsx
-
 import React from 'react';
 import { Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Avatar, List, ListItem, ListItemAvatar, ListItemText } from '@mui/material';
 import { PieChart } from '@mui/x-charts/PieChart';
 import FaceIcon from '@mui/icons-material/Face';
 import '../App.css';
 
-// Helper functions specific to this page
 function createData(todo: string, areaOfInvestment: string) {
   return { todo, areaOfInvestment };
 }
@@ -25,12 +22,10 @@ function generate(element: React.ReactElement<unknown>) {
   );
 }
 
-// The component for your home page content
 function HomePage() {
   const [dense] = React.useState(false);
   const [secondary] = React.useState(false);
 
-  // Note: The <header> is no longer here. It's in the main App.tsx layout.
   return (
     <>
       <section className="hero-image">

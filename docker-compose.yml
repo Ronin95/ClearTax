@@ -25,14 +25,17 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+      target: development
     container_name: cleartax_react
     ports:
-      - "3002:3000"
+      - "3000:3000"
     volumes:
       - ./client:/app
       - /app/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - WDS_SOCKET_PORT=0
     stdin_open: true
     tty: true
     depends_on:
