@@ -18,40 +18,63 @@ export async function initDB() {
         
         console.log("✅ Successfully connected to immudb");
 
-        // 1. Create the Users Table (Removed UNIQUE from the inline definition)
+        // 1. Users Table
         await client.SQLExec({
             sql: `CREATE TABLE IF NOT EXISTS users (
                 id VARCHAR[36],
+                username VARCHAR[256],
                 email VARCHAR[256],
+                imageId VARCHAR[64],
                 hashedPassword VARCHAR[256],
                 createdAt TIMESTAMP,
                 PRIMARY KEY id
             );`
         });
 
-        // 2. Create a UNIQUE INDEX for the email (This is how ImmuDB handles uniqueness)
+        // 2. Email Index
         try {
-            await client.SQLExec({
-                sql: `CREATE UNIQUE INDEX ON users(email);`
-            });
-        } catch (idxErr) {
-            // Ignore error if index already exists
-            console.log("ℹ️ Note: User email index already exists or skipped.");
+            await client.SQLExec({ sql: `CREATE UNIQUE INDEX ON users(email);` });
+        } catch (idxErr) { /* Silent if exists */ }
+
+        // 3. Categories Table
+        await client.SQLExec({
+            sql: `CREATE TABLE IF NOT EXISTS funding_categories (
+                id INTEGER,
+                name VARCHAR[64],
+                PRIMARY KEY id
+            );`
+        });
+
+        const categories = [
+            { id: 1, name: 'Infrastructure' },
+            { id: 2, name: 'Technology' },
+            { id: 3, name: 'Transportation' }
+        ];
+
+        for (const cat of categories) {
+            try {
+                await client.SQLExec({ 
+                    sql: `INSERT INTO funding_categories (id, name) VALUES (${cat.id}, '${cat.name}');` 
+                });
+            } catch (e) {
+                // Keep this silent to avoid cluttering your console
+            }
         }
 
-        // 3. Create the Refresh Tokens Table
         await client.SQLExec({
-            sql: `CREATE TABLE IF NOT EXISTS refresh_tokens (
-                token VARCHAR[256],
+            sql: `CREATE TABLE IF NOT EXISTS contributions (
+                id VARCHAR[36],
                 userId VARCHAR[36],
-                expiresAt TIMESTAMP,
-                PRIMARY KEY token
+                categoryId INTEGER,
+                amount FLOAT, 
+                createdAt TIMESTAMP,
+                PRIMARY KEY id
             );`
         });
         
         console.log("✅ immudb Tables and Indices Initialized");
     } catch (err) {
-        console.error("❌ Connection to immudb failed:", err);
+        console.error("❌ DB Initialization failed:", err);
         process.exit(1);
     }
 }

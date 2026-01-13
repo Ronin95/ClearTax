@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Avatar, List, ListItem, ListItemAvatar, ListItemText } from '@mui/material';
 import { PieChart } from '@mui/x-charts/PieChart';
 import FaceIcon from '@mui/icons-material/Face';
@@ -23,8 +23,37 @@ function generate(element: React.ReactElement<unknown>) {
 }
 
 function HomePage() {
-  const [dense] = React.useState(false);
-  const [secondary] = React.useState(false);
+  const [allContributions, setAllContributions] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // 1. Fetch data from backend
+  useEffect(() => {
+    fetch('/api/contributions/recent')
+      .then(res => res.json())
+      .then(data => {
+        console.log("Fetched Data:", data); // Check console to verify keys
+        setAllContributions(data);
+      })
+      .catch(err => console.error("Error fetching feed:", err));
+  }, []);
+
+  // 2. Change interval to 5000ms (5 seconds)
+  useEffect(() => {
+    if (allContributions.length === 0) return;
+
+    const interval = setInterval(() => {
+      setCurrentIndex((prevIndex) => (prevIndex + 1) % allContributions.length);
+    }, 5000); 
+
+    return () => clearInterval(interval);
+  }, [allContributions]);
+
+  // 3. Logic to grab 3 items
+  const visibleContributions = [
+    allContributions[currentIndex],
+    allContributions[(currentIndex + 1) % allContributions.length],
+    allContributions[(currentIndex + 2) % allContributions.length],
+  ].filter(Boolean);
 
   return (
     <>
@@ -45,23 +74,27 @@ function HomePage() {
         <Stack spacing={2} direction="row">
             <div className="feature-box">
               <Typography sx={{ mt: 4, mb: 2 }} variant="h6" component="div">
-                Live List displaying how people are using their taxes.
+                  Live List displaying how people are using their taxes.
               </Typography>
-              <List dense={dense}>
-              {generate(
-                <ListItem>
-                  <ListItemAvatar>
-                    <Avatar>
-                      <FaceIcon />
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary="has supported"
-                    secondary={secondary ? 'Secondary text' : null}
-                  />
-                </ListItem>,
-              )}
-            </List>
+              <List sx={{ height: '300px', overflow: 'hidden' }}>
+                {visibleContributions.map((item, index) => (
+                  <ListItem 
+                    key={`${item.username}-${index}`}
+                    sx={{ transition: 'all 0.5s ease' }}
+                  >
+                    <ListItemAvatar>
+                      <Avatar 
+                        alt={item.username}
+                        src={item.imageUrl}
+                      />
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={`${item.username} supported ${item.category}`}
+                      secondary={`Amount: €${item.amount}`}
+                    />
+                  </ListItem>
+                ))}
+              </List>
             </div>
             
             <div className="feature-box">

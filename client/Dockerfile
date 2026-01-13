@@ -1,5 +1,5 @@
 # Stage 1: Development (The "base" for dev)
-FROM node:22-alpine AS development
+FROM node:24-alpine AS development
 WORKDIR /app
 COPY package*.json ./
 RUN npm install

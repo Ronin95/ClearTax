@@ -1,13 +1,9 @@
-Access Database Docker Terminal:
-docker exec -it cleartax_postgres psql -U postgres -d cleartax
-
 React Material UI
 https://mui.com/material-ui/react-avatar/
 https://mui.com/x/react-charts/label/
 
 
 server typescript:
-
 example:
 server/src/
 ├── config/       # Move config.ts here
@@ -24,3 +20,8 @@ docker compose logs cleartax_nodejs
 docker compose logs cleartax_react
 docker compose logs immudb
 
+this command - while you are inside the server folder creates a 1000 users
+docker exec -it cleartax_nodejs node --experimental-strip-types src/seed.ts
+
+this command - while you are inside the server folder create 1000 transactions
+docker exec -it cleartax_nodejs node --experimental-strip-types src/seedTransactions.ts
