@@ -1,0 +1,30 @@
+React Material UI
+https://mui.com/material-ui/react-avatar/
+https://mui.com/x/react-charts/label/
+
+
+server typescript:
+example:
+server/src/
+├── config/       # Move config.ts here
+├── controllers/  # Create logic for users (signup/login)
+├── middlewares/  # Add error handling or JWT verification
+├── routes/       # Define your API endpoints
+├── db.ts         # Your existing immudb logic
+└── index.ts      # Server entry point
+
+adapt later
+
+to access the logs of the docker images:
+docker compose logs cleartax_nodejs
+docker compose logs cleartax_react
+docker compose logs immudb
+
+this command - while you are inside the server folder creates a 1000 users
+docker exec -it cleartax_nodejs node --experimental-strip-types src/seed.ts
+
+this command - while you are inside the server folder create 1000 transactions
+docker exec -it cleartax_nodejs node --experimental-strip-types src/seedTransactions.ts
+
+this command - while you are inside the server folder create a dozen fake data points for the table
+docker exec -it cleartax_nodejs node --experimental-strip-types src/seedProblems.ts

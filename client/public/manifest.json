@@ -1,0 +1,26 @@
+{
+  "short_name": "ClearTax",
+  "name": "Clear Tax - Control Your Tax Money",
+  "description": "ClearTax gives citizens control over how their tax money helps society.",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/cleartax/",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}
