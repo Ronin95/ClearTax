@@ -61,6 +61,17 @@ export async function initDB() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
+        
+        // 5. Open Problems Table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS open_problems (
+                id UUID PRIMARY KEY,
+                user_id UUID REFERENCES users(id),
+                category_id INTEGER REFERENCES funding_categories(id),
+                todo TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
 
         client.release();
         console.log("✅ PostgreSQL Tables Initialized");

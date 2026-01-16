@@ -25,3 +25,6 @@ docker exec -it cleartax_nodejs node --experimental-strip-types src/seed.ts
 
 this command - while you are inside the server folder create 1000 transactions
 docker exec -it cleartax_nodejs node --experimental-strip-types src/seedTransactions.ts
+
+this command - while you are inside the server folder create a dozen fake data points for the table
+docker exec -it cleartax_nodejs node --experimental-strip-types src/seedProblems.ts

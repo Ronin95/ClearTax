@@ -5,21 +5,10 @@ import FaceIcon from '@mui/icons-material/Face';
 import axios from 'axios';
 import '../App.css';
 
-function createData(todo: string, areaOfInvestment: string) {
-  return { todo, areaOfInvestment };
-}
-
-const rows = [
-  createData('Pothole has to be filled.', 'Infrastructure'),
-  createData('Invest in chinese high-speed trains and bring them to Austria.', 'Technology'),
-  createData('We need more busses passing through in this village.', 'Transportation'),
-  createData('Replace broken swings and slides at Stadtpark Kinder playground', 'Infrastructure'),
-  createData('Build covered bike lanes connecting Linz suburbs to downtown', 'Transportation'),
-];
-
 function HomePage() {
   const [allContributions, setAllContributions] = useState<any[]>([]);
-  const [pieData, setPieData] = useState<any[]>([]); // New state for PieChart data
+  const [pieData, setPieData] = useState<any[]>([]);
+  const [openProblems, setOpenProblems] = useState<any[]>([]); 
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
@@ -31,10 +20,15 @@ function HomePage() {
 
     axios.get('/api/landingPage/pieChart')
       .then(res => {
-        console.log("Fetched Pie Data:", res.data);
         setPieData(res.data);
       })
       .catch(err => console.error("Error fetching pie chart data:", err));
+
+    axios.get('/api/landingPage/openProblems')
+      .then(res => {
+        setOpenProblems(res.data);
+      })
+      .catch(err => console.error("Error fetching open problems:", err));
   }, []);
 
   useEffect(() => {
@@ -61,9 +55,7 @@ function HomePage() {
                 Welcome to ClearTax
             </Typography>
             <Typography className="hero-subtitle" variant="h3" gutterBottom>
-                ClearTax gives you control over how your tax money helps society. 
-                Don't rely on politicians to represent your interests - it's your money, 
-                you should decide how it's used and benefit society through your own actions!
+                Direct Democracy for the Modern Taxpayer. <br/> ClearTax bridges the gap between your wallet and your community. Allocate your tax funds directly to Infrastructure, Technology, or Transportation projects. Stop wondering where your money goes and start seeing the results of your choices in real-time.
             </Typography>
         </Stack>
       </section>
@@ -113,8 +105,8 @@ function HomePage() {
               <Typography sx={{ mt: 4, mb: 2 }} variant="h6" component="div">
                 Examine where you can help further.
               </Typography>
-              <TableContainer component={Paper}>
-                <Table sx={{ minWidth: 650 }} size="small" aria-label="a dense table">
+              <TableContainer component={Paper} sx={{ maxHeight: 300 }}>
+                <Table stickyHeader sx={{ minWidth: 650 }} size="small" aria-label="a dense table">
                   <TableHead>
                     <TableRow>
                       <TableCell>To Do</TableCell>
@@ -122,16 +114,16 @@ function HomePage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {rows.map((row) => (
+                    {openProblems.map((problem, index) => (
                       <TableRow
-                        key={row.todo}
+                        key={index}
                         sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
                       >
                         <TableCell component="th" scope="row">
-                          {row.todo}
+                          {problem.todo}
                         </TableCell>
                         <TableCell align="right">
-                          {row.areaOfInvestment}
+                          {problem.areaOfInvestment}
                         </TableCell>
                       </TableRow>
                     ))}

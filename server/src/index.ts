@@ -108,6 +108,24 @@ app.get('/api/landingPage/pieChart', async (req, res) => {
     }
 });
 
+app.get('/api/landingPage/openProblems', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                p.todo, 
+                fc.name AS "areaOfInvestment"
+            FROM open_problems p
+            JOIN funding_categories fc ON p.category_id = fc.id
+            ORDER BY p.created_at DESC
+            LIMIT 50; -- You can change this limit as needed
+        `);
+
+        res.json(result.rows);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 const start = async () => {
   await initDB();
   app.listen(3000, '0.0.0.0', () => {
