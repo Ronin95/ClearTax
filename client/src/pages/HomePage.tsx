@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Avatar, List, ListItem, ListItemAvatar, ListItemText } from '@mui/material';
 import { PieChart } from '@mui/x-charts/PieChart';
 import FaceIcon from '@mui/icons-material/Face';
+import axios from 'axios';
 import '../App.css';
 
 function createData(todo: string, areaOfInvestment: string) {
@@ -16,28 +17,26 @@ const rows = [
   createData('Build covered bike lanes connecting Linz suburbs to downtown', 'Transportation'),
 ];
 
-function generate(element: React.ReactElement<unknown>) {
-  return [0, 1, 2].map((value) =>
-    React.cloneElement(element, { key: value })
-  );
-}
-
 function HomePage() {
   const [allContributions, setAllContributions] = useState<any[]>([]);
+  const [pieData, setPieData] = useState<any[]>([]); // New state for PieChart data
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // 1. Fetch data from backend
   useEffect(() => {
-    fetch('/api/contributions/recent')
-      .then(res => res.json())
-      .then(data => {
-        console.log("Fetched Data:", data); // Check console to verify keys
-        setAllContributions(data);
+    axios.get('/api/landingPage/contributions')
+      .then(res => {
+        setAllContributions(res.data);
       })
       .catch(err => console.error("Error fetching feed:", err));
+
+    axios.get('/api/landingPage/pieChart')
+      .then(res => {
+        console.log("Fetched Pie Data:", res.data);
+        setPieData(res.data);
+      })
+      .catch(err => console.error("Error fetching pie chart data:", err));
   }, []);
 
-  // 2. Change interval to 5000ms (5 seconds)
   useEffect(() => {
     if (allContributions.length === 0) return;
 
@@ -48,7 +47,6 @@ function HomePage() {
     return () => clearInterval(interval);
   }, [allContributions]);
 
-  // 3. Logic to grab 3 items
   const visibleContributions = [
     allContributions[currentIndex],
     allContributions[(currentIndex + 1) % allContributions.length],
@@ -83,10 +81,9 @@ function HomePage() {
                     sx={{ transition: 'all 0.5s ease' }}
                   >
                     <ListItemAvatar>
-                      <Avatar 
-                        alt={item.username}
-                        src={item.imageUrl}
-                      />
+                      <Avatar alt={item.username}>
+                        <FaceIcon />
+                      </Avatar>
                     </ListItemAvatar>
                     <ListItemText
                       primary={`${item.username} supported ${item.category}`}
@@ -104,14 +101,10 @@ function HomePage() {
               <PieChart
                 series={[
                   {
-                    data: [
-                      { id: 0, value: 10, label: 'Infrastructure' },
-                      { id: 1, value: 15, label: 'Technology' },
-                      { id: 2, value: 20, label: 'Transportation' },
-                    ],
+                    data: pieData,
                   },
                 ]}
-                width={200}
+                width={400}
                 height={200}
               />
             </div>

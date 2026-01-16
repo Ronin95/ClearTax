@@ -7,11 +7,11 @@ const envOrThrow = (key: string): string => {
 export const apiConfig = {
   port: process.env.PORT || 3000,
   jwtSecret: envOrThrow("JWT_SECRET"),
-  immudb: {
-    host: process.env.IMMUDB_HOST || 'immudb',
-    port: parseInt(process.env.IMMUDB_PORT || '3322'),
-    user: process.env.IMMUDB_USER || 'immudb',
-    password: process.env.IMMUDB_PASSWORD || 'immudb',
-    database: 'defaultdb'
+  db: {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    user: process.env.DB_USER || 'cleartax_user',
+    password: process.env.DB_PASSWORD || 'cleartax_password',
+    database: process.env.DB_NAME || 'cleartax_db',
   }
 };

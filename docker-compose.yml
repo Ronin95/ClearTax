@@ -12,13 +12,17 @@ services:
       - ./.env:/app/.env
     command: node --watch --experimental-strip-types --env-file=./.env src/index.ts
     depends_on:
-      immudb:
+      postgres:
+        condition: service_healthy
+      aistor:
         condition: service_started
     environment:
-      - IMMUDB_HOST=immudb
-      - IMMUDB_PORT=3322
-      - IMMUDB_USER=immudb
-      - IMMUDB_PASSWORD=immudb
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - S3_ENDPOINT=${S3_ENDPOINT}
       - JWT_SECRET=${JWT_SECRET}
 
   cleartax_react:
@@ -41,30 +45,50 @@ services:
     depends_on:
       - cleartax_nodejs
 
-  immudb:
-    image: codenotary/immudb:latest
-    container_name: cleartax_immudb
+  postgres:
+    image: postgres:16-alpine
+    container_name: cleartax_postgres
     ports:
-      - "3322:3322"
-      - "8081:8080"
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
     volumes:
-      - immudb_data:/var/lib/immudb
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: always
-  
-  minio:
-    image: quay.io/minio/minio
-    container_name: cleartax_minio
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: cleartax_pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+    depends_on:
+      - postgres
+    restart: always
+
+  aistor:
+    image: quay.io/minio/aistor/minio:latest
+    container_name: cleartax_aistor
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio_data:/data
+      - ./minio/data:/mnt/data
+      - ./minio/minio.license/minio.license:/minio.license
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-    command: server /data --console-address ":9001"
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    command: server /mnt/data --console-address ":9001" --license /minio.license
     restart: always
 
 volumes:
-  immudb_data:
-  minio_data:
+  postgres_data:

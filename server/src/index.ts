@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { initDB, client } from './db.ts';
-import { apiConfig } from './config.ts';
+import { initDB, pool } from './db.ts';
 import { hashPassword, checkPasswordHash, makeJWT, makeRefreshToken } from './auth.ts';
 import { v4 as uuidv4 } from 'uuid';
 import * as Minio from 'minio';
@@ -14,67 +13,52 @@ const minioClient = new Minio.Client({
   secretKey: 'minioadmin'
 });
 
-interface ContributionData {
-    username: string;
-    imageId: string;
-    category: string;
-    amount: number;
-    createdAt: string | number;
-}
-
 const app = express();
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 app.use(express.json());
 
-// Signup logic
 app.post('/api/signup', async (req, res) => {
-  const { email, password, username } = req.body; // Added username
+  const { email, password, username } = req.body;
   const id = uuidv4();
   const hashedPassword = await hashPassword(password);
   
   try {
-    // Corrected method to SQLExec and added username column
-    await client.SQLExec({
-      sql: `INSERT INTO users (id, username, email, hashedPassword, createdAt) 
-            VALUES ('${id}', '${username || email.split('@')[0]}', '${email}', '${hashedPassword}', NOW())`
-    });
+    await pool.query(
+    `INSERT INTO users (id, username, email, hashed_password) VALUES ($1, $2, $3, $4)`,
+      [id, username || email.split('@')[0], email, hashedPassword]
+    );
     res.status(201).json({ id, email });
   } catch (err: any) {
-    console.error("Signup error:", err);
     res.status(400).json({ error: "User already exists or DB error" });
   }
 });
 
-// Login logic
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   
   try {
-    // Corrected to SQLQuery
-    const result = await client.SQLQuery({
-      sql: `SELECT id, hashedPassword FROM users WHERE email = '${email}'`
-    });
+    const result = await pool.query(
+      'SELECT id, hashed_password FROM users WHERE email = $1', 
+      [email]
+    );
 
-    // immudb checks: result.rows is the array
-    if (!result || !result.rows || result.rows.length === 0) {
+    if (result.rows.length === 0) {
         return res.status(401).send("Invalid credentials");
     }
 
-    // Access values correctly (.s for string)
-    const userId = result.rows[0].values[0].s;
-    const dbHashedPassword = result.rows[0].values[1].s;
-
-    const isMatch = await checkPasswordHash(password, dbHashedPassword);
+    const user = result.rows[0];
+    const isMatch = await checkPasswordHash(password, user.hashedPassword);
+    
     if (!isMatch) return res.status(401).send("Invalid credentials");
 
-    const token = makeJWT(userId, 3600);
+    const token = makeJWT(user.id, 3600);
     const refreshToken = makeRefreshToken();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
 
-    // Store refresh token
-    await client.SQLExec({
-      sql: `INSERT INTO refresh_tokens (token, userId, expiresAt) 
-            VALUES ('${refreshToken}', '${userId}', '${new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString()}')`
-    });
+    await pool.query(
+      `INSERT INTO refresh_tokens (token, "userId", "expiresAt") VALUES ($1, $2, $3)`,
+      [refreshToken, user.id, expiresAt]
+    );
 
     res.json({ token, refreshToken });
   } catch (err) {
@@ -82,64 +66,53 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-app.get('/api/contributions/recent', async (req, res) => {
+app.get('/api/landingPage/contributions', async (req, res) => {
     try {
-        const result = await client.SQLQuery({
-            sql: `SELECT u.username, u.imageId, fc.name as category, c.amount, c.createdAt 
-                  FROM contributions c 
-                  JOIN users u ON c.userId = u.id 
-                  JOIN funding_categories fc ON c.categoryId = fc.id
-                  ORDER BY c.createdAt DESC LIMIT 145;`
-        });
+        const result = await pool.query(`
+            SELECT u.username, fc.name as category, c.amount, c.created_at
+            FROM contributions c 
+            JOIN users u ON c.user_id = u.id 
+            JOIN funding_categories fc ON c.category_id = fc.id
+            ORDER BY c.created_at DESC LIMIT 1000;
+        `);
 
-        const rows = Array.isArray(result) ? result : (result?.rows || []);
-
-        const dataWithSecureLinks = await Promise.all(rows.map(async (row: any) => {
-            // FIX 1: Access values using lowercase keys as returned by immudb
-            const username = row.username || row.values?.[0]?.s;
-            const imageId  = row.imageid  || row.imageId || row.values?.[1]?.s; // imageid is lowercase in your logs
-            const category = row.category || row.values?.[2]?.s;
-            
-            // FIX 2: Correct amount extraction (check lowercase 'amount')
-            const rawAmount = row.amount !== undefined ? row.amount : (row.values?.[3]?.d || row.values?.[3]?.n || 0);
-            const amountFormatted = parseFloat(rawAmount.toString()).toFixed(2);
-
-            let presignedUrl = "";
-            if (imageId && imageId !== "undefined") {
-                try {
-                    // Generate using 'minio' endpoint for internal communication
-                    const rawUrl = await minioClient.presignedGetObject(
-                        'cleartax-images', 
-                        `${imageId}.png`, 
-                        3600
-                    );
-                    
-                    // FIX 3: Browser Networking - replace 'minio' with 'localhost'
-                    // Your Windows browser cannot resolve the container name 'minio'
-                    presignedUrl = rawUrl.replace('minio:9000', 'localhost:9000');
-                } catch (e) {
-                    console.error(`MinIO link generation failed for ${imageId}:`, e);
-                }
-            }
-
-            return {
-                username: username || "Unknown",
-                category: category || "General",
-                amount: amountFormatted,
-                imageUrl: presignedUrl
-            };
+        const simplifiedData = result.rows.map((row: any) => ({
+            username: row.username || "Unknown",
+            category: row.category || "General",
+            amount: parseFloat(row.amount).toFixed(2),
+            createdAt: row.created_at
         }));
 
-        res.json(dataWithSecureLinks);
+        res.json(simplifiedData);
     } catch (error: any) {
-        console.error("❌ API Error:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/landingPage/pieChart', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                fc.id, 
+                fc.name AS label, 
+                COUNT(c.id)::int AS value
+            FROM funding_categories fc
+            LEFT JOIN contributions c ON fc.id = c.category_id
+            GROUP BY fc.id, fc.name
+            ORDER BY fc.id ASC;
+        `);
+        res.json(result.rows);
+    } catch (error: any) {
+        console.error("❌ PieChart API Error:", error.message);
         res.status(500).json({ error: error.message });
     }
 });
 
 const start = async () => {
   await initDB();
-  app.listen(3000, () => console.log("🚀 Server running on port 3000"));
+  app.listen(3000, '0.0.0.0', () => {
+    console.log("🚀 Server running on http://0.0.0.0:3000");
+  });
 };
 
 start();
