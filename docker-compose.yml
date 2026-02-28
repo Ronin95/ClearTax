@@ -14,8 +14,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      aistor:
-        condition: service_started
     environment:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
@@ -75,21 +73,6 @@ services:
       - pgadmin_data:/var/lib/pgadmin
     depends_on:
       - postgres
-    restart: always
-
-  aistor:
-    image: quay.io/minio/aistor/minio:latest
-    container_name: cleartax_aistor
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - ./minio/data:/mnt/data
-      - ./minio/minio.license/minio.license:/minio.license
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-    command: server /mnt/data --console-address ":9001" --license /minio.license
     restart: always
 
 volumes:
