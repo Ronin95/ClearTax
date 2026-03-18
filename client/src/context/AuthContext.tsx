@@ -6,13 +6,12 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // Add a loading state
+  const [loading, setLoading] = useState(true);
 
-  // Check for an active session on the server when the app loads
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const response = await axios.get('http://localhost:3001/api/me');
+        const response = await axios.get('/api/auth/me'); 
         setUser(response.data.user);
       } catch (error) {
         setUser(null);
@@ -23,22 +22,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkSession();
   }, []);
 
-  const login = (userData: User) => {
+  const login = (userData: User, token: string) => {
     setUser(userData);
   };
 
   const logout = async () => {
     try {
-      await axios.post('http://localhost:3001/cleartax/logout');
+      await axios.post('/api/auth/logout');
       setUser(null);
     } catch (error) {
       console.error("Logout failed", error);
     }
   };
 
-  // Don't render the app until we know if the user is logged in or not
   if (loading) {
-    return <div>Loading...</div>;
+    return <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20%' }}>Loading...</div>;
   }
 
   return (

@@ -63,32 +63,37 @@ async function seedProblems() {
     try {
         await initDB();
         
-        const usersRes = await pool.query('SELECT id FROM users;');
-        const userIds = usersRes.rows.map(r => r.id);
+        const usersRes = await pool.query('SELECT id, created_at FROM users WHERE role_id = 1;');
+        const users = usersRes.rows;
 
         const catsRes = await pool.query('SELECT id FROM funding_categories;');
         const categoryIds = catsRes.rows.map(r => r.id);
 
-        console.log(`🌱 Generating 1000 open problems...`);
+        if (users.length === 0) {
+            console.error("❌ ERROR: No regular users found. Please run seedUsersRegular.ts first.");
+            process.exit(1);
+        }
+
+        console.log(`🌱 Generating 1000 open problems (Citizens only) with relative dates...`);
 
         for (let i = 1; i <= 1000; i++) {
             const id = crypto.randomUUID();
-            const userId = faker.helpers.arrayElement(userIds);
+            const randomUser = faker.helpers.arrayElement(users);
             const categoryId = faker.helpers.arrayElement(categoryIds) as keyof typeof templates;
             
-            // Pick a random template based on the category
             const template = faker.helpers.arrayElement(templates[categoryId]);
-            
-            // Fill the template with realistic Faker data
-            const todo = template
-                .replace('{street}', faker.location.street())
-                .replace('{park}', `${faker.person.lastName()} Memorial Park`)
-                .replace('{neighborhood}', faker.location.city())
-                .replace('{building}', `${faker.company.name()} Center`);
+            const todo = template;
+
+            // Generate date between user creation and now
+            const problemDate = faker.date.between({
+                from: randomUser.created_at,
+                to: new Date()
+            });
 
             await pool.query(
-                `INSERT INTO open_problems (id, user_id, category_id, todo) VALUES ($1, $2, $3, $4)`,
-                [id, userId, categoryId, todo]
+                `INSERT INTO open_problems (id, user_id, category_id, todo, created_at) 
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [id, randomUser.id, categoryId, todo, problemDate]
             );
 
             if (i % 100 === 0) console.log(`✅ ${i}/1000 problems created...`);

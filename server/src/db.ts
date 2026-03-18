@@ -8,19 +8,42 @@ export async function initDB() {
         const client = await pool.connect();
         console.log("✅ Successfully connected to PostgreSQL");
 
-        // 1. Users Table
+        // Roles Table
+        await pool.query(
+            `CREATE TABLE IF NOT EXISTS user_roles (
+                id INTEGER PRIMARY KEY,
+                name VARCHAR(64) UNIQUE
+            );
+        `);
+
+        const roles = [
+            [1, 'regularUser'],
+            [2, 'companyUser'],
+            [3, 'admin']
+        ];
+
+        for (const [id, name] of roles) {
+            await pool.query(`
+                INSERT INTO user_roles (id, name) 
+                VALUES ($1, $2) 
+                ON CONFLICT (id) DO NOTHING;
+            `, [id, name]);
+        }
+
+        // Users Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id UUID PRIMARY KEY,
                 username VARCHAR(256),
                 email VARCHAR(256) UNIQUE,
-                image_id VARCHAR(256) NULL,
                 hashed_password VARCHAR(256),
+                role_id INTEGER REFERENCES user_roles(id) DEFAULT 1,
+                company_name VARCHAR(256) NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
-        // 2. Refresh Tokens Table (Missing in your original initDB but used in login)
+        // Refresh Tokens Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS refresh_tokens (
                 token TEXT PRIMARY KEY,
@@ -29,7 +52,7 @@ export async function initDB() {
             );
         `);
 
-        // 3. Categories Table
+        // Categories Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS funding_categories (
                 id INTEGER PRIMARY KEY,
@@ -51,7 +74,7 @@ export async function initDB() {
             `, [id, name]);
         }
 
-        // 4. Contributions Table
+        // Contributions Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS contributions (
                 id UUID PRIMARY KEY,
@@ -62,7 +85,7 @@ export async function initDB() {
             );
         `);
         
-        // 5. Open Problems Table
+        // Open Problems Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS open_problems (
                 id UUID PRIMARY KEY,

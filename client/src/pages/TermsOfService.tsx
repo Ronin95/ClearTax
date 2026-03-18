@@ -1,5 +1,5 @@
 import React from 'react';
-import { Container, Typography, Box, Paper, Divider, List, ListItem, ListItemText } from '@mui/material';
+import { Container, Typography, Box, Paper, Divider } from '@mui/material';
 
 const TermsOfService = () => {
   return (

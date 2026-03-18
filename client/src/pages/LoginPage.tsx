@@ -13,25 +13,21 @@ function LoginPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
         try {
-            const response = await axios.post('http://localhost:3001/cleartax/login', {
-                email,
-                password
-            });
+            const response = await axios.post('/api/auth/login', { email, password });
+            const { user, token } = response.data;
 
-            login(response.data.token);
-            console.log('Login successful! Token received:', response.data.token);
-            
-            // Navigate to the new success page
-            navigate('/success'); 
+            // This now matches the 2-argument signature
+            login(user, token); 
 
-        } catch (err) {
-            if (axios.isAxiosError(err) && err.response) {
-                setError(err.response.data.message || 'An error occurred.');
-            } else {
-                setError('An unknown error occurred.');
+            // Role-based redirection
+            if (user.role_id === 1) {
+                navigate('/regular-dashboard');
+            } else if (user.role_id === 2) {
+                navigate('/company-dashboard');
             }
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Login failed');
         }
     };
 
