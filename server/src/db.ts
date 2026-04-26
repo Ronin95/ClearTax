@@ -36,9 +36,12 @@ export async function initDB() {
                 id UUID PRIMARY KEY,
                 username VARCHAR(256),
                 email VARCHAR(256) UNIQUE,
+                tax_number VARCHAR(9) UNIQUE,
                 hashed_password VARCHAR(256),
                 role_id INTEGER REFERENCES user_roles(id) DEFAULT 1,
                 company_name VARCHAR(256) NULL,
+                available_amount DECIMAL(12, 2) DEFAULT 0.00,
+                contributed_amount DECIMAL(12, 2) DEFAULT 0.00,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
@@ -63,7 +66,8 @@ export async function initDB() {
         const categories = [
             [1, 'Infrastructure'],
             [2, 'Technology'],
-            [3, 'Transportation']
+            [3, 'Transportation'],
+            [4, 'Debt Repayment']
         ];
 
         for (const [id, name] of categories) {
@@ -80,7 +84,7 @@ export async function initDB() {
                 id UUID PRIMARY KEY,
                 user_id UUID REFERENCES users(id),
                 category_id INTEGER REFERENCES funding_categories(id),
-                amount DECIMAL(12, 2), 
+                contributed_amount_by_user DECIMAL(12, 2), 
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);

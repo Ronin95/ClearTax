@@ -5,7 +5,7 @@ import { TextField, Button, Typography, Container, Box } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 
 function LoginPage() {
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState(''); // email or username
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
@@ -14,13 +14,14 @@ function LoginPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const response = await axios.post('/api/auth/login', { email, password });
+            const response = await axios.post('http://localhost:3001/api/auth/login', {
+                identifier: identifier,
+                password: password
+            }, { withCredentials: true });
             const { user, token } = response.data;
 
-            // This now matches the 2-argument signature
             login(user, token); 
 
-            // Role-based redirection
             if (user.role_id === 1) {
                 navigate('/regular-dashboard');
             } else if (user.role_id === 2) {
@@ -45,8 +46,8 @@ function LoginPage() {
                       name="email"
                       autoComplete="email"
                       autoFocus
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
                     />
                     <TextField
                       margin="normal"

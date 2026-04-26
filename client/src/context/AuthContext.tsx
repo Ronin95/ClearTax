@@ -11,12 +11,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const response = await axios.get('/api/auth/me'); 
+        const response = await axios.get('http://localhost:3001/api/users/me', {
+          withCredentials: true 
+        }); 
         setUser(response.data.user);
       } catch (error) {
         setUser(null);
       } finally {
-        setLoading(false);
+        setLoading(false); // This ensures the app stops "Loading..."
       }
     };
     checkSession();
@@ -28,7 +30,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await axios.post('/api/auth/logout');
+      await axios.post('http://localhost:3001/api/auth/logout', {}, {
+        withCredentials: true
+      });
       setUser(null);
     } catch (error) {
       console.error("Logout failed", error);

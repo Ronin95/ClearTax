@@ -4,16 +4,11 @@ import { pool } from "../db.ts";
 export const getRecentContributions = async (req: Request, res: Response) => {
     try {
         const result = await pool.query(`
-            SELECT 
-                u.username, 
-                fc.name as category, 
-                c.amount, 
-                TO_CHAR(c.created_at, 'YYYY-MM-DD HH24:MI') as "createdAt"
+            SELECT u.username, fc.name as category, c.contributed_amount_by_user as amount, c.created_at
             FROM contributions c 
             JOIN users u ON c.user_id = u.id 
             JOIN funding_categories fc ON c.category_id = fc.id
-            ORDER BY c.created_at DESC 
-            LIMIT 1000;
+            ORDER BY c.created_at DESC LIMIT 1000;
         `);
 
         const data = result.rows.map((row: any) => ({

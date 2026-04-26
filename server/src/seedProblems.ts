@@ -67,10 +67,18 @@ async function seedProblems() {
         const users = usersRes.rows;
 
         const catsRes = await pool.query('SELECT id FROM funding_categories;');
-        const categoryIds = catsRes.rows.map(r => r.id);
+        
+        const categoryIds = catsRes.rows
+            .map(r => r.id)
+            .filter(id => id in templates); 
 
         if (users.length === 0) {
             console.error("❌ ERROR: No regular users found. Please run seedUsersRegular.ts first.");
+            process.exit(1);
+        }
+
+        if (categoryIds.length === 0) {
+            console.error("❌ ERROR: No matching categories found in templates.");
             process.exit(1);
         }
 
@@ -81,10 +89,9 @@ async function seedProblems() {
             const randomUser = faker.helpers.arrayElement(users);
             const categoryId = faker.helpers.arrayElement(categoryIds) as keyof typeof templates;
             
-            const template = faker.helpers.arrayElement(templates[categoryId]);
-            const todo = template;
+            const templateList = templates[categoryId];
+            const todo = faker.helpers.arrayElement(templateList);
 
-            // Generate date between user creation and now
             const problemDate = faker.date.between({
                 from: randomUser.created_at,
                 to: new Date()

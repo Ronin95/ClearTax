@@ -17,3 +17,6 @@ client/build/
 minio/minio.license/
 minio/data/
 *.bin
+
+# Logs
+loginData.txt
