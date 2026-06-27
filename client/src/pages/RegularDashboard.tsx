@@ -23,6 +23,10 @@ interface User {
 }
 
 export default function RegularDashboard() {
+    const [debtStats, setDebtStats] = useState({ number_of_people: 0, amount_paid: 0 });
+    const [solidarityInput, setSolidarityInput] = useState<string>('');
+    const [isSubmittingDebt, setIsSubmittingDebt] = useState(false);
+
     const [user, setUser] = useState<User | null>(null);
     const [availableTax, setAvailableTax] = useState<number>(0);
     const [loading, setLoading] = useState(true);
@@ -42,6 +46,55 @@ export default function RegularDashboard() {
     const [risAvailable, setRisAvailable] = useState<number | null>(null);
     const [manualAmount, setManualAmount] = useState<number | string>('');
     const [syncError, setSyncError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchDebtStats = async () => {
+            try {
+                const res = await axios.get('http://localhost:3001/api/landingPage/debt-stats');
+                
+                setDebtStats({
+                    number_of_people: res.data.number_of_people,
+                    amount_paid: res.data.amount_paid
+                });
+            } catch (err) {
+                console.error("Error fetching debt stats", err);
+            }
+        };
+        fetchDebtStats();
+    }, []);
+
+    const handleSolidaritySubmit = async () => {
+        const amount = parseFloat(solidarityInput);
+        if (isNaN(amount) || amount <= 0 || amount > availableTax) return;
+
+        setIsSubmittingDebt(true);
+        try {
+            // Use port 3001 to match backend
+            const response = await axios.post('http://localhost:3001/api/users/contribute-debt', 
+                { amount }, 
+                { withCredentials: true }
+            );
+            
+            // Update local UI with the absolute truth from the server response
+            const newBalance = parseFloat(response.data.newBalance);
+            setAvailableTax(newBalance);
+
+            // Refresh debt stats so the "number of people" count is accurate
+            setDebtStats(prev => ({
+                number_of_people: prev.number_of_people + 1,
+                amount_paid: prev.amount_paid + amount
+            }));
+
+            setOpenSolidarity(false);
+            setSolidarityInput('');
+            alert("Thank you for your contribution to the National Solidarity fund!");
+        } catch (err) {
+            console.error("Debt contribution failed", err);
+            alert("Payment failed. Please ensure you have enough available tax.");
+        } finally {
+            setIsSubmittingDebt(false);
+        }
+    };
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -173,7 +226,7 @@ export default function RegularDashboard() {
                                     maximumFractionDigits: 2
                                 })}
                             </Typography>
-                            <Typography variant="body2">Ready for project allocation</Typography>
+                            <Typography variant="body2">Ready for investments</Typography>
                         </CardContent>
                     </Card>
                 </section>
@@ -230,8 +283,6 @@ export default function RegularDashboard() {
                 </section>
             </section>
 
-            {/* ================= MODALS (DIALOGS) ================= */}
-
             {/* 1. Voluntary Increase Modal */}
             <Dialog open={openIncrease} onClose={() => setOpenIncrease(false)} fullWidth maxWidth="xs">
                 <DialogTitle>Tax Management & Sync</DialogTitle>
@@ -255,8 +306,6 @@ export default function RegularDashboard() {
                         {risMessage && (
                             <Alert severity={risMessage.type}>{risMessage.text}</Alert>
                         )}
-
-                        {/* Note: Manual percentage increase section removed as per your focus on RIS sync */}
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
@@ -272,17 +321,52 @@ export default function RegularDashboard() {
             </Dialog>
 
             {/* 2. National Solidarity Modal */}
-            <Dialog open={openSolidarity} onClose={() => setOpenSolidarity(false)}>
+            <Dialog open={openSolidarity} onClose={() => setOpenSolidarity(false)} fullWidth maxWidth="xs">
                 <DialogTitle>Confirm National Contribution</DialogTitle>
                 <DialogContent>
-                    <Typography>
-                        Are you sure you want to allocate your available tax (€{availableTax}) to help pay off the National Debt? This action is non-reversible.
-                    </Typography>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Below you can see the current Austrian national debt:
+                        </Typography>
+                        
+                        <Box sx={{ display: 'flex', justifyContent: 'center', bgcolor: '#f5f5f5', p: 1, borderRadius: 1 }}>
+                            <iframe 
+                                src="https://staatsschulden.at/widget?font=courier&amp;font_size=16&amp;background_color=f5f5f5&amp;caption_color=111111&amp;padding=5" 
+                                style={{ border: 'none', overflow: 'hidden', width: '200px', height: '100px' }}
+                            ></iframe>
+                        </Box>
+
+                        <Alert severity="info" icon={<PublicIcon />}>
+                            So far, <b>{debtStats.number_of_people}+ people</b> have paid <b>€ +{debtStats.amount_paid.toLocaleString('de-AT', { minimumFractionDigits: 2 })}</b> towards the national debt.
+                        </Alert>
+
+                        <Typography variant="body2">
+                            Your contribution will directly reduce the national debt.
+                        </Typography>
+
+                        <TextField
+                            label="Amount to Contribute"
+                            fullWidth
+                            type="number"
+                            value={solidarityInput}
+                            onChange={(e) => setSolidarityInput(e.target.value)}
+                            slotProps={{
+                                htmlInput: { step: "0.01", min: "0" }
+                            }}
+                            error={parseFloat(solidarityInput) > availableTax}
+                            helperText={parseFloat(solidarityInput) > availableTax ? "Exceeds available tax" : `Max: €${availableTax.toLocaleString('de-AT')}`}
+                        />
+                    </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
                     <Button onClick={() => setOpenSolidarity(false)}>Go Back</Button>
-                    <Button variant="contained" color="error" onClick={() => setOpenSolidarity(false)}>
-                        Yes, Execute Payment
+                    <Button 
+                        variant="contained" 
+                        color="error" 
+                        onClick={handleSolidaritySubmit}
+                        disabled={!solidarityInput || parseFloat(solidarityInput) <= 0 || parseFloat(solidarityInput) > availableTax || isSubmittingDebt}
+                    >
+                        {isSubmittingDebt ? <CircularProgress size={24} /> : "Yes, Execute Payment"}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -307,7 +391,6 @@ export default function RegularDashboard() {
                                 <MenuItem value="Infrastructure">Infrastructure</MenuItem>
                                 <MenuItem value="Technology">Technology</MenuItem>
                                 <MenuItem value="Transportation">Transportation</MenuItem>
-                                <MenuItem value="Environment">Environment</MenuItem>
                             </Select>
                         </FormControl>
                         <TextField 

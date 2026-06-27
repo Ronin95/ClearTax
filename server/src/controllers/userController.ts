@@ -66,3 +66,58 @@ export const increaseAvailableTax = async (req: AuthRequest, res: Response) => {
         return res.status(500).json({ error: "Internal server error." });
     }
 };
+
+export const contributeToDebt = async (req: AuthRequest, res: Response) => {
+    // Destructure amount from the parsed body
+    const { amount } = req.body; 
+    const userId = req.user?.id;
+
+    if (!amount || amount <= 0) {
+        return res.status(400).json({ error: "Invalid contribution amount" });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch current balance
+        const userRes = await client.query('SELECT available_amount FROM users WHERE id = $1', [userId]);
+        const currentBalance = parseFloat(userRes.rows[0].available_amount);
+
+        if (currentBalance < amount) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: "Insufficient funds" });
+        }
+
+        // 2. Update User (Decrease available, Increase contributed)
+        await client.query(`
+            UPDATE users 
+            SET available_amount = available_amount - $1, 
+                contributed_amount = contributed_amount + $1 
+            WHERE id = $2`, 
+            [amount, userId]
+        );
+
+        // 3. Create Contribution Record
+        // Note: Column name is contributed_amount_by_user based on your db.ts
+        await client.query(`
+            INSERT INTO contributions (id, user_id, category_id, contributed_amount_by_user) 
+            VALUES (gen_random_uuid(), $1, (SELECT id FROM funding_categories WHERE name = 'Debt Repayment'), $2)`,
+            [userId, amount]
+        );
+
+        await client.query('COMMIT');
+        
+        // Return updated stats
+        res.json({ 
+            message: "Contribution successful", 
+            newBalance: currentBalance - amount 
+        });
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error("Debt Contribution Error:", e);
+        res.status(500).json({ error: "Transaction failed" });
+    } finally {
+        client.release();
+    }
+};

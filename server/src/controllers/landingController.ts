@@ -58,3 +58,23 @@ export const getOpenProblems = async (req: Request, res: Response) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+export const getDebtStats = async (req: Request, res: Response) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                COUNT(DISTINCT user_id)::int AS "number_of_people", 
+                COALESCE(SUM(contributed_amount_by_user), 0)::float AS "amount_paid"
+            FROM contributions
+            WHERE category_id = (SELECT id FROM funding_categories WHERE name = 'Debt Repayment')
+        `);
+
+        // Log the result to the Docker console so you can verify it
+        console.log("Debt Stats Fetched:", result.rows[0]);
+
+        res.json(result.rows[0]);
+    } catch (error: any) {
+        console.error("Error in getDebtStats:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+};
