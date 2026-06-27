@@ -10,11 +10,13 @@
     "@mui/material": "^7.2.0",
     "@mui/x-charts": "^8.9.0",
     "@mui/x-data-grid": "^8.8.0",
+    "@react-google-maps/api": "^2.20.8",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "@types/jest": "^27.5.2",
+    "@types/mui-image": "^1.0.5",
     "@types/node": "^16.18.126",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
@@ -53,5 +55,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "@types/google.maps": "^3.65.2"
   }
 }

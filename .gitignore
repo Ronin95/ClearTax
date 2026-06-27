@@ -20,3 +20,4 @@ minio/data/
 
 # Logs
 loginData.txt
+garage.toml

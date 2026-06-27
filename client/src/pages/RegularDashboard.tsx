@@ -2,14 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { 
     Container, Typography, Card, CardContent, Button, Box,
     Dialog, DialogTitle, DialogContent, DialogActions, TextField, 
-    MenuItem, FormControl, InputLabel, Select, Stack, CircularProgress, Alert
+    MenuItem, FormControl, InputLabel, Select, Stack, CircularProgress, Alert,
+    Switch, FormControlLabel, FormGroup, IconButton
 } from "@mui/material";
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import PublicIcon from '@mui/icons-material/Public';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'; // New icon for RIS check
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import axios from 'axios';
+import { Image } from 'mui-image';
+import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 
 // 1. Define the User interface
 interface User {
@@ -21,6 +26,23 @@ interface User {
     contributed_amount: string;
     role_id: number;
 }
+
+// 2. Define the Project Data Interface
+interface ProjectData {
+    id: string;
+    title: string;
+    category: string;
+    description: string;
+    images: File[];
+    files: File[];
+    address: string;
+    contributionAmount: string | number;
+    ownTaxes: boolean;
+}
+
+// Map settings
+const mapContainerStyle = { width: '100%', height: '200px', borderRadius: '8px', marginTop: '16px' };
+const defaultCenter = { lat: 48.2082, lng: 16.3738 }; // Default: Vienna, Austria
 
 export default function RegularDashboard() {
     const [debtStats, setDebtStats] = useState({ number_of_people: 0, amount_paid: 0 });
@@ -39,13 +61,32 @@ export default function RegularDashboard() {
     // RIS Check States
     const [isCheckingRis, setIsCheckingRis] = useState(false);
     const [risMessage, setRisMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    
+    // 3. Updated Project Data State (Supports multiple images and files)
+    const [projectData, setProjectData] = useState<ProjectData>({ 
+        id: '',
+        title: '', 
+        category: 'Infrastructure', 
+        description: '',
+        images: [],
+        files: [],
+        address: '',
+        contributionAmount: '',
+        ownTaxes: false
+    });
 
-    const [increasePct, setIncreasePct] = useState('5');
-    const [projectData, setProjectData] = useState({ title: '', category: 'Infrastructure', description: '' });
+    const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+    const [submittedProjects, setSubmittedProjects] = useState<ProjectData[]>([]);
 
     const [risAvailable, setRisAvailable] = useState<number | null>(null);
     const [manualAmount, setManualAmount] = useState<number | string>('');
     const [syncError, setSyncError] = useState<string | null>(null);
+
+    // Google Maps API Loader
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY || ''
+    });
 
     useEffect(() => {
         const fetchDebtStats = async () => {
@@ -69,17 +110,14 @@ export default function RegularDashboard() {
 
         setIsSubmittingDebt(true);
         try {
-            // Use port 3001 to match backend
             const response = await axios.post('http://localhost:3001/api/users/contribute-debt', 
                 { amount }, 
                 { withCredentials: true }
             );
             
-            // Update local UI with the absolute truth from the server response
             const newBalance = parseFloat(response.data.newBalance);
             setAvailableTax(newBalance);
 
-            // Refresh debt stats so the "number of people" count is accurate
             setDebtStats(prev => ({
                 number_of_people: prev.number_of_people + 1,
                 amount_paid: prev.amount_paid + amount
@@ -116,21 +154,20 @@ export default function RegularDashboard() {
     const handleRisCheck = () => {
         setIsCheckingRis(true);
         setRisMessage(null);
-        setRisAvailable(null); // Reset found amount on new check
+        setRisAvailable(null);
 
         setTimeout(() => {
             const success = Math.random() > 0.2; 
             if (success) {
                 const rawAmount = Math.random() * (5000 - 500) + 500;
                 
-                // Format for display: "1234,55"
                 const displayAmount = new Intl.NumberFormat('de-AT', { 
                     minimumFractionDigits: 2, 
                     maximumFractionDigits: 2,
                     useGrouping: false 
                 }).format(rawAmount);
 
-                setRisAvailable(rawAmount); // Store the raw number (e.g. 1234.55)
+                setRisAvailable(rawAmount); 
                 setRisMessage({ 
                     type: 'success', 
                     text: `RIS System found €${displayAmount} in unclaimed tax credits.` 
@@ -174,36 +211,75 @@ export default function RegularDashboard() {
         </Container>
     );
 
-    const handleIncreaseSubmit = async () => {
-        const amountToUpload = Number(manualAmount);
+    // Dynamic available tax deduction display logic
+    const currentContribution = Number(projectData.contributionAmount) || 0;
+    const remainingTax = Math.max(0, availableTax - currentContribution);
 
-        // Validation logic
-        if (!risAvailable || amountToUpload > risAvailable) {
-            setSyncError(`You cannot claim more than the €${risAvailable} found by RIS.`);
-            return;
-        }
-
-        try {
-            const response = await axios.post('http://localhost:3001/api/users/increase-available-tax',
-                { amount: amountToUpload }, 
-                { withCredentials: true }
-            );
-
-            // Update local availableTax state with the new balance from DB
-            setAvailableTax(parseFloat(response.data.newBalance));
-            setOpenIncrease(false);
-            // Reset states for next time
-            setRisAvailable(null);
-            setManualAmount('');
-        } catch (err) {
-            setSyncError("Failed to save amount to database.");
-        }
+    const handleOpenCreateNew = () => {
+        setEditingProjectId(null);
+        setProjectData({
+            id: '',
+            title: '', 
+            category: 'Infrastructure', 
+            description: '',
+            images: [],
+            files: [],
+            address: '',
+            contributionAmount: '',
+            ownTaxes: false
+        });
+        setOpenCreate(true);
     };
 
     const handleCreateProject = () => {
-        console.log("New Project Created:", projectData);
+        if (editingProjectId) {
+            // Update existing project
+            setSubmittedProjects(prev => prev.map(p => p.id === editingProjectId ? { ...projectData } : p));
+        } else {
+            // Create new project
+            const newProject = { ...projectData, id: Date.now().toString() };
+            setSubmittedProjects([...submittedProjects, newProject]);
+        }
         setOpenCreate(false);
     };
+
+    const handleEditProject = (id: string) => {
+        const projectToEdit = submittedProjects.find(p => p.id === id);
+        if (projectToEdit) {
+            setProjectData(projectToEdit);
+            setEditingProjectId(id);
+            setOpenCreate(true);
+        }
+    };
+
+    const handleDeleteProject = (id: string) => {
+        setSubmittedProjects(prev => prev.filter(p => p.id !== id));
+    };
+
+    // Google Maps Click Handler
+    const onMapClick = (e: google.maps.MapMouseEvent) => {
+        if (e.latLng) {
+            // Round coordinates for a cleaner text field display
+            const lat = e.latLng.lat().toFixed(6);
+            const lng = e.latLng.lng().toFixed(6);
+            setProjectData({ ...projectData, address: `${lat}, ${lng}` });
+        }
+    };
+
+    // Parse the current address safely to render a Map Marker if coordinates are entered
+    const getMarkerPosition = (address: string) => {
+        if (!address) return null;
+        const parts = address.split(',');
+        if (parts.length === 2) {
+            const lat = parseFloat(parts[0].trim());
+            const lng = parseFloat(parts[1].trim());
+            if (!isNaN(lat) && !isNaN(lng)) {
+                return { lat, lng };
+            }
+        }
+        return null;
+    };
+    const markerPos = getMarkerPosition(projectData.address);
 
     return (
         <Container sx={{ py: 8 }}>
@@ -275,13 +351,90 @@ export default function RegularDashboard() {
                             </Typography>
                         </CardContent>
                         <Box sx={{ p: 2 }}>
-                            <Button variant="outlined" fullWidth onClick={() => setOpenCreate(true)}>
+                            <Button variant="outlined" fullWidth onClick={handleOpenCreateNew}>
                                 Create Project
                             </Button>
                         </Box>
                     </Card>
                 </section>
             </section>
+
+            {/* Render Newly Created Projects */}
+            {submittedProjects.length > 0 && (
+                <section style={{ marginTop: '40px' }}>
+                    <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
+                        My Proposed Projects
+                    </Typography>
+                    <Stack spacing={3}>
+                        {submittedProjects.map((proj) => (
+                            <Card key={proj.id} variant="outlined">
+                                <CardContent sx={{ position: 'relative' }}>
+                                    
+                                    {/* Action Buttons */}
+                                    <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 1 }}>
+                                        <IconButton size="small" onClick={() => handleEditProject(proj.id)} color="primary">
+                                            <EditIcon />
+                                        </IconButton>
+                                        <IconButton size="small" onClick={() => handleDeleteProject(proj.id)} color="error">
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </Box>
+
+                                    <Typography variant="h6" fontWeight="bold" sx={{ pr: 10 }}>{proj.title}</Typography>
+                                    <Typography color="primary" variant="subtitle2" gutterBottom>{proj.category}</Typography>
+                                    <Typography variant="body2" sx={{ mb: 2 }}>{proj.description}</Typography>
+                                    
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Location:</strong> {proj.address || 'Not specified'}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Contribution:</strong> €{Number(proj.contributionAmount).toLocaleString('de-AT', { minimumFractionDigits: 2 })}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        <strong>Using Own Taxes:</strong> {proj.ownTaxes ? 'Yes' : 'No'}
+                                    </Typography>
+
+                                    {/* Multi-Image Display */}
+                                    {proj.images.length > 0 && (
+                                        <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', mt: 3 }}>
+                                            {proj.images.map((img, idx) => (
+                                                <Box key={idx} sx={{ width: 150, height: 100, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
+                                                    <Image 
+                                                        src={URL.createObjectURL(img)} 
+                                                        fit="cover" 
+                                                        duration={500} 
+                                                        alt={`Project upload ${idx}`}
+                                                    />
+                                                </Box>
+                                            ))}
+                                        </Box>
+                                    )}
+
+                                    {/* PDF Download Links */}
+                                    {proj.files.length > 0 && (
+                                        <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #eee' }}>
+                                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Attached PDF Documents:</Typography>
+                                            <Stack spacing={1}>
+                                                {proj.files.map((file, idx) => (
+                                                    <Typography key={idx} variant="body2">
+                                                        <a 
+                                                            href={URL.createObjectURL(file)} 
+                                                            download={file.name}
+                                                            style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }}
+                                                        >
+                                                            📎 Download {file.name}
+                                                        </a>
+                                                    </Typography>
+                                                ))}
+                                            </Stack>
+                                        </Box>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </Stack>
+                </section>
+            )}
 
             {/* 1. Voluntary Increase Modal */}
             <Dialog open={openIncrease} onClose={() => setOpenIncrease(false)} fullWidth maxWidth="xs">
@@ -312,8 +465,8 @@ export default function RegularDashboard() {
                     <Button onClick={() => setOpenIncrease(false)}>Cancel</Button>
                     <Button 
                         variant="contained" 
-                        onClick={handleSyncToDashboard} // Trigger the backend sync
-                        disabled={!risAvailable || isCheckingRis} // Enabled only if money was found
+                        onClick={handleSyncToDashboard} 
+                        disabled={!risAvailable || isCheckingRis} 
                     >
                         Send to Dashboard
                     </Button>
@@ -333,6 +486,7 @@ export default function RegularDashboard() {
                             <iframe 
                                 src="https://staatsschulden.at/widget?font=courier&amp;font_size=16&amp;background_color=f5f5f5&amp;caption_color=111111&amp;padding=5" 
                                 style={{ border: 'none', overflow: 'hidden', width: '200px', height: '100px' }}
+                                title="National Debt Widget"
                             ></iframe>
                         </Box>
 
@@ -373,12 +527,13 @@ export default function RegularDashboard() {
 
             {/* 3. Create Project Modal */}
             <Dialog open={openCreate} onClose={() => setOpenCreate(false)} fullWidth maxWidth="sm">
-                <DialogTitle>Propose Community Project</DialogTitle>
+                <DialogTitle>{editingProjectId ? "Edit Community Project" : "Propose Community Project"}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={3} sx={{ mt: 1 }}>
                         <TextField 
                             label="Project Title" 
                             fullWidth 
+                            value={projectData.title}
                             onChange={(e) => setProjectData({...projectData, title: e.target.value})}
                         />
                         <FormControl fullWidth>
@@ -394,17 +549,156 @@ export default function RegularDashboard() {
                             </Select>
                         </FormControl>
                         <TextField 
-                            label="Detailed Description" 
+                            label="Summary Description" 
+                            placeholder="Write a short overview of the project."
                             multiline 
                             rows={4} 
                             fullWidth 
+                            value={projectData.description}
                             onChange={(e) => setProjectData({...projectData, description: e.target.value})}
                         />
+
+                        {/* Multi Image Upload Feature */}
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Images Upload</Typography>
+                            <Button variant="outlined" component="label" sx={{ mb: 2 }}>
+                                Select Images
+                                <input 
+                                    type="file" 
+                                    hidden 
+                                    multiple
+                                    accept="image/*" 
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files.length > 0) {
+                                            const newImages = Array.from(e.target.files);
+                                            setProjectData({ ...projectData, images: [...projectData.images, ...newImages] });
+                                        }
+                                    }} 
+                                />
+                            </Button>
+                            
+                            {/* Preview multiple images inline */}
+                            {projectData.images.length > 0 && (
+                                <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', p: 1 }}>
+                                    {projectData.images.map((img, idx) => (
+                                        <Box key={idx} sx={{ height: 80, width: 80, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
+                                            <img 
+                                                src={URL.createObjectURL(img)} 
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                alt={`Preview ${idx}`}
+                                            />
+                                        </Box>
+                                    ))}
+                                </Box>
+                            )}
+                        </Box>
+
+                        {/* Multi PDF File Upload Feature */}
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>PDF Upload</Typography>
+                            <Button variant="outlined" component="label" sx={{ mb: 2 }}>
+                                Select PDF Files
+                                <input 
+                                    type="file" 
+                                    hidden 
+                                    multiple
+                                    accept="application/pdf" 
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files.length > 0) {
+                                            const newFiles = Array.from(e.target.files);
+                                            setProjectData({ ...projectData, files: [...projectData.files, ...newFiles] });
+                                        }
+                                    }} 
+                                />
+                            </Button>
+                            
+                            {/* List selected PDF files */}
+                            {projectData.files.length > 0 && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                    {projectData.files.map((file, idx) => (
+                                        <Typography key={idx} variant="body2" color="primary">
+                                            📎 {file.name}
+                                        </Typography>
+                                    ))}
+                                </Box>
+                            )}
+                        </Box>
+
+                        {/* Interactive Google Map / Address */}
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Location Map / Address</Typography>
+                            <TextField 
+                                label="Project Address or Coordinates" 
+                                fullWidth 
+                                value={projectData.address}
+                                onChange={(e) => setProjectData({...projectData, address: e.target.value})}
+                                helperText="Type an address or click anywhere on the map to drop a pin."
+                            />
+                            {isLoaded ? (
+                                <GoogleMap
+                                    mapContainerStyle={mapContainerStyle}
+                                    center={markerPos || defaultCenter}
+                                    zoom={12}
+                                    onClick={onMapClick}
+                                    options={{ streetViewControl: false }}
+                                >
+                                    {markerPos && <Marker position={markerPos} />}
+                                </GoogleMap>
+                            ) : (
+                                <Box sx={{ width: '100%', height: '200px', bgcolor: 'grey.200', display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 2, borderRadius: 1 }}>
+                                    <CircularProgress />
+                                </Box>
+                            )}
+                        </Box>
+
+                        {/* Contribution Area */}
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                How much would you like to contribute to start this project?
+                            </Typography>
+                            <Stack direction="row" alignItems="center" spacing={2}>
+                                <TextField
+                                    label="Amount"
+                                    type="number"
+                                    value={projectData.contributionAmount}
+                                    onChange={(e) => setProjectData({...projectData, contributionAmount: e.target.value})}
+                                    sx={{ width: '150px' }}
+                                    error={currentContribution > availableTax}
+                                />
+                                <Typography variant="body2" color={currentContribution > availableTax ? "error" : "text.secondary"}>
+                                    Total amount remaining:<br/> <b>€ {remainingTax.toLocaleString('de-AT', {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2
+                                    })}</b>
+                                    {currentContribution > availableTax && <><br/>(Exceeds available tax)</>}
+                                </Typography>
+                            </Stack>
+                        </Box>
+
+                        {/* Will Contribute using Own Taxes Toggle */}
+                        <FormGroup>
+                            <FormControlLabel 
+                                control={
+                                    <Switch 
+                                        checked={projectData.ownTaxes} 
+                                        onChange={(e) => setProjectData({ ...projectData, ownTaxes: e.target.checked })} 
+                                    />
+                                } 
+                                label="Will I work / contribute to this project with my own taxes?" 
+                            />
+                        </FormGroup>
+
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
                     <Button onClick={() => setOpenCreate(false)}>Discard</Button>
-                    <Button variant="contained" onClick={handleCreateProject}>Submit Proposal</Button>
+                    <Button 
+                        variant="contained" 
+                        onClick={handleCreateProject} 
+                        disabled={!projectData.title || currentContribution > availableTax}
+                    >
+                        {editingProjectId ? "Save Changes" : "Submit Proposal"}
+                    </Button>
                 </DialogActions>
             </Dialog>
 

@@ -14,14 +14,20 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      garage:
+        condition: service_started
     environment:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
-      - S3_ENDPOINT=${S3_ENDPOINT}
       - JWT_SECRET=${JWT_SECRET}
+      - S3_ENDPOINT=http://garage:3900
+      - S3_REGION=garage
+      # These will be configured via the Garage CLI once it is running
+      - AWS_ACCESS_KEY_ID=${GARAGE_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${GARAGE_SECRET_KEY}
 
   cleartax_react:
     build:
@@ -75,6 +81,21 @@ services:
       - postgres
     restart: always
 
+  garage:
+    image: dxflrs/garage:v2.3.0
+    container_name: cleartax_garage
+    restart: always
+    ports:
+      - "3900:3900" # S3 API
+      - "3901:3901" # RPC communication
+      - "3902:3902" # S3 Web
+    volumes:
+      - ./garage.toml:/etc/garage.toml
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+
 volumes:
   postgres_data:
   pgadmin_data:
+  garage_meta:
+  garage_data:
