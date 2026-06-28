@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/authRoutes.ts';
 import landingRoutes from './routes/landingRoutes.ts';
 import userRoutes from './routes/userRoutes.ts';
+import projectRoutes from './routes/projectRoutes.ts';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -23,6 +24,9 @@ app.use('/api/landingPage', landingRoutes);
 
 // User Routes
 app.use('/api/users', userRoutes);
+
+// Project Routes
+app.use('/api/projects', projectRoutes);
 
 const start = async () => {
   await initDB();

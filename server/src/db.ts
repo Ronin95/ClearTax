@@ -95,7 +95,14 @@ export async function initDB() {
                 id UUID PRIMARY KEY,
                 user_id UUID REFERENCES users(id),
                 category_id INTEGER REFERENCES funding_categories(id),
-                todo TEXT,
+                project_name VARCHAR(255),
+                summar_desc TEXT,
+                image_list TEXT[] DEFAULT '{}',
+                file_list TEXT[] DEFAULT '{}',
+                latitude DECIMAL(10, 6),
+                longitude DECIMAL(10, 6),
+                amount_raised DECIMAL(12, 2) DEFAULT 0.00,
+                creator_work BOOLEAN DEFAULT false,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);

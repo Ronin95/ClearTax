@@ -10,8 +10,10 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import PublicIcon from '@mui/icons-material/Public';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close'; // IMPORTED CLOSE ICON
 import axios from 'axios';
 import { Image } from 'mui-image';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
@@ -33,15 +35,15 @@ interface ProjectData {
     title: string;
     category: string;
     description: string;
-    images: File[];
-    files: File[];
+    images: any[]; 
+    files: any[];  
     address: string;
     contributionAmount: string | number;
     ownTaxes: boolean;
 }
 
 // Map settings
-const mapContainerStyle = { width: '100%', height: '200px', borderRadius: '8px', marginTop: '16px' };
+const mapContainerStyle = { width: '100%', height: '400px', borderRadius: '8px', marginTop: '16px' };
 const defaultCenter = { lat: 48.2082, lng: 16.3738 }; // Default: Vienna, Austria
 
 export default function RegularDashboard() {
@@ -62,7 +64,7 @@ export default function RegularDashboard() {
     const [isCheckingRis, setIsCheckingRis] = useState(false);
     const [risMessage, setRisMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     
-    // 3. Updated Project Data State (Supports multiple images and files)
+    // 3. Updated Project Data State
     const [projectData, setProjectData] = useState<ProjectData>({ 
         id: '',
         title: '', 
@@ -88,11 +90,38 @@ export default function RegularDashboard() {
         googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY || ''
     });
 
+    const fetchProjects = async () => {
+        try {
+            const response = await axios.get('http://localhost:3001/api/projects', { withCredentials: true });
+            const projectsFromDB = response.data.projects || response.data;
+            
+            if (Array.isArray(projectsFromDB)) {
+                const formattedProjects = projectsFromDB.map((p: any) => ({
+                    id: p.id,
+                    title: p.project_name || p.title || '',                     // DB: project_name
+                    category: p.category_id === 2 ? 'Technology' : p.category_id === 3 ? 'Transportation' : 'Infrastructure',
+                    description: p.summar_desc || p.description || '',          // DB: summar_desc
+                    images: p.image_list || p.images || [],                     // DB: image_list
+                    files: p.file_list || p.files || [],                        // DB: file_list
+                    address: (p.latitude && p.longitude) ? `${p.latitude}, ${p.longitude}` : '', 
+                    contributionAmount: p.amount_raised || p.contributionAmount || 0, // DB: amount_raised
+                    ownTaxes: p.creator_work === true                           // DB: creator_work
+                }));
+                setSubmittedProjects(formattedProjects);
+            }
+        } catch (err) {
+            console.error("Failed to fetch projects from backend", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchProjects();
+    }, []);
+
     useEffect(() => {
         const fetchDebtStats = async () => {
             try {
                 const res = await axios.get('http://localhost:3001/api/landingPage/debt-stats');
-                
                 setDebtStats({
                     number_of_people: res.data.number_of_people,
                     amount_paid: res.data.amount_paid
@@ -196,8 +225,6 @@ export default function RegularDashboard() {
             setOpenIncrease(false);
             setRisAvailable(null);
             setRisMessage(null);
-            
-            console.log("Database successfully updated to:", updatedBalance);
         } catch (err) {
             console.error("Sync failed", err);
             setRisMessage({ type: 'error', text: 'Database sync failed. The amount was not saved.' });
@@ -211,36 +238,94 @@ export default function RegularDashboard() {
         </Container>
     );
 
-    // Dynamic available tax deduction display logic
     const currentContribution = Number(projectData.contributionAmount) || 0;
     const remainingTax = Math.max(0, availableTax - currentContribution);
 
     const handleOpenCreateNew = () => {
         setEditingProjectId(null);
         setProjectData({
-            id: '',
-            title: '', 
-            category: 'Infrastructure', 
-            description: '',
-            images: [],
-            files: [],
-            address: '',
-            contributionAmount: '',
-            ownTaxes: false
+            id: '', title: '', category: 'Infrastructure', description: '',
+            images: [], files: [], address: '', contributionAmount: '', ownTaxes: false
         });
         setOpenCreate(true);
     };
 
-    const handleCreateProject = () => {
-        if (editingProjectId) {
-            // Update existing project
-            setSubmittedProjects(prev => prev.map(p => p.id === editingProjectId ? { ...projectData } : p));
-        } else {
-            // Create new project
-            const newProject = { ...projectData, id: Date.now().toString() };
-            setSubmittedProjects([...submittedProjects, newProject]);
+    // UI HELPER: Remove an image
+    const removeImage = (idxToRemove: number) => {
+        setProjectData({
+            ...projectData,
+            images: projectData.images.filter((_, idx) => idx !== idxToRemove)
+        });
+    };
+
+    // UI HELPER: Remove a file
+    const removeFile = (idxToRemove: number) => {
+        setProjectData({
+            ...projectData,
+            files: projectData.files.filter((_, idx) => idx !== idxToRemove)
+        });
+    };
+
+    const handleCreateProject = async () => {
+        const formData = new FormData();
+        
+        formData.append('title', projectData.title);
+        formData.append('description', projectData.description);
+        formData.append('contributionAmount', projectData.contributionAmount.toString());
+        formData.append('ownTaxes', projectData.ownTaxes ? 'true' : 'false');
+        
+        const catMap: Record<string, number> = { 'Infrastructure': 1, 'Technology': 2, 'Transportation': 3 };
+        formData.append('category_id', catMap[projectData.category]?.toString() || '1');
+
+        const parts = projectData.address.split(',');
+        if (parts.length === 2) {
+            formData.append('latitude', parts[0].trim());
+            formData.append('longitude', parts[1].trim());
         }
-        setOpenCreate(false);
+
+        // Separate existing files (URLs/strings) from new uploads (Files)
+        const existingImages = projectData.images.filter(img => typeof img === 'string');
+        const newImages = projectData.images.filter(img => img instanceof File);
+        
+        const existingFiles = projectData.files.filter(file => typeof file === 'string');
+        const newFiles = projectData.files.filter(file => file instanceof File);
+
+        // Send existing files as a JSON string so backend knows what to keep
+        formData.append('existingImages', JSON.stringify(existingImages));
+        formData.append('existingFiles', JSON.stringify(existingFiles));
+
+        // Append actual new File objects
+        newImages.forEach(img => formData.append('images', img));
+        newFiles.forEach(file => formData.append('files', file));
+
+        try {
+            if (editingProjectId) {
+                // PUT Request for editing
+                await axios.put(`http://localhost:3001/api/projects/${editingProjectId}`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    withCredentials: true 
+                });
+            } else {
+                // POST Request for creating
+                await axios.post('http://localhost:3001/api/projects', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    withCredentials: true 
+                });
+            }
+            
+            // Refetch perfectly from database to update UI safely
+            await fetchProjects();
+            
+            setOpenCreate(false);
+            setProjectData({
+                id: '', title: '', category: 'Infrastructure', description: '',
+                images: [], files: [], address: '', contributionAmount: '', ownTaxes: false
+            });
+            
+        } catch (error) {
+            console.error('Project save failed', error);
+            alert("Failed to save project to the server.");
+        }
     };
 
     const handleEditProject = (id: string) => {
@@ -252,34 +337,73 @@ export default function RegularDashboard() {
         }
     };
 
-    const handleDeleteProject = (id: string) => {
-        setSubmittedProjects(prev => prev.filter(p => p.id !== id));
+    const handleDeleteProject = async (id: string) => {
+        const confirmDelete = window.confirm("Are you sure you want to completely delete this project?");
+        if (!confirmDelete) return;
+
+        try {
+            // Tell backend to delete from postgres and clean up S3
+            await axios.delete(`http://localhost:3001/api/projects/${id}`, { withCredentials: true });
+            
+            // Remove from UI instantly
+            setSubmittedProjects(prev => prev.filter(p => p.id !== id));
+        } catch (error) {
+            console.error("Failed to delete project", error);
+            alert("Failed to delete the project.");
+        }
     };
 
-    // Google Maps Click Handler
     const onMapClick = (e: google.maps.MapMouseEvent) => {
         if (e.latLng) {
-            // Round coordinates for a cleaner text field display
             const lat = e.latLng.lat().toFixed(6);
             const lng = e.latLng.lng().toFixed(6);
             setProjectData({ ...projectData, address: `${lat}, ${lng}` });
         }
     };
 
-    // Parse the current address safely to render a Map Marker if coordinates are entered
     const getMarkerPosition = (address: string) => {
         if (!address) return null;
         const parts = address.split(',');
         if (parts.length === 2) {
             const lat = parseFloat(parts[0].trim());
             const lng = parseFloat(parts[1].trim());
-            if (!isNaN(lat) && !isNaN(lng)) {
-                return { lat, lng };
-            }
+            if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
         }
         return null;
     };
     const markerPos = getMarkerPosition(projectData.address);
+
+    const getImageUrl = (img: any) => {
+        if (img instanceof File) return URL.createObjectURL(img);
+        if (typeof img === 'string') return `http://localhost:3001/api/projects/file/cleartax-image-uploads/${img}`;
+        if (img && img.url) return img.url;
+        return '';
+    };
+
+    const getFileUrl = (file: any) => {
+        if (file instanceof File) return URL.createObjectURL(file);
+        if (typeof file === 'string') return `http://localhost:3001/api/projects/file/cleartax-file-uploads/${file}`;
+        if (file && file.url) return file.url;
+        return '#';
+    };
+
+    const getFileName = (file: any, idx: number) => {
+        // 1. If it's a new file just selected from the computer
+        if (file instanceof File) return file.name;
+        
+        // 2. If it's an existing file fetched from the database
+        if (typeof file === 'string') {
+            const underscoreIndex = file.indexOf('_');
+            if (underscoreIndex !== -1) {
+                // Return everything AFTER the first underscore (the original name)
+                return file.substring(underscoreIndex + 1);
+            }
+            return file; // Fallback for any old files uploaded before this change
+        }
+        
+        if (file && file.name) return file.name;
+        return `Document_${idx + 1}.pdf`;
+    };
 
     return (
         <Container sx={{ py: 8 }}>
@@ -360,11 +484,20 @@ export default function RegularDashboard() {
             </section>
 
             {/* Render Newly Created Projects */}
-            {submittedProjects.length > 0 && (
-                <section style={{ marginTop: '40px' }}>
-                    <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
-                        My Proposed Projects
-                    </Typography>
+            <section style={{ marginTop: '40px' }}>
+                <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
+                    My Proposed Projects
+                </Typography>
+                
+                {submittedProjects.length === 0 ? (
+                    <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                        <CardContent sx={{ textAlign: 'center', py: 5 }}>
+                            <Typography variant="body1" color="text.secondary">
+                                No projects created.
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                ) : (
                     <Stack spacing={3}>
                         {submittedProjects.map((proj) => (
                             <Card key={proj.id} variant="outlined">
@@ -384,9 +517,26 @@ export default function RegularDashboard() {
                                     <Typography color="primary" variant="subtitle2" gutterBottom>{proj.category}</Typography>
                                     <Typography variant="body2" sx={{ mb: 2 }}>{proj.description}</Typography>
                                     
-                                    <Typography variant="body2" color="text.secondary">
-                                        <strong>Location:</strong> {proj.address || 'Not specified'}
-                                    </Typography>
+                                    <Box display="flex" alignItems="center" gap={1}>
+                                        <Typography variant="body2" color="text.secondary">
+                                            <strong>Location:</strong> {proj.address || 'Not specified'}
+                                        </Typography>
+                                        {proj.address && (
+                                            <Button
+                                                size="small"
+                                                variant="text"
+                                                color="primary"
+                                                endIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
+                                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(proj.address)}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                sx={{ p: 0, minWidth: 'auto', textTransform: 'none', fontWeight: 'bold' }}
+                                            >
+                                                View on Maps
+                                            </Button>
+                                        )}
+                                    </Box>
+
                                     <Typography variant="body2" color="text.secondary">
                                         <strong>Contribution:</strong> €{Number(proj.contributionAmount).toLocaleString('de-AT', { minimumFractionDigits: 2 })}
                                     </Typography>
@@ -395,12 +545,12 @@ export default function RegularDashboard() {
                                     </Typography>
 
                                     {/* Multi-Image Display */}
-                                    {proj.images.length > 0 && (
+                                    {proj.images && proj.images.length > 0 && (
                                         <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', mt: 3 }}>
                                             {proj.images.map((img, idx) => (
-                                                <Box key={idx} sx={{ width: 150, height: 100, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
+                                                <Box key={idx} sx={{ width: 250, height: 200, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
                                                     <Image 
-                                                        src={URL.createObjectURL(img)} 
+                                                        src={getImageUrl(img)} 
                                                         fit="cover" 
                                                         duration={500} 
                                                         alt={`Project upload ${idx}`}
@@ -411,18 +561,20 @@ export default function RegularDashboard() {
                                     )}
 
                                     {/* PDF Download Links */}
-                                    {proj.files.length > 0 && (
+                                    {proj.files && proj.files.length > 0 && (
                                         <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #eee' }}>
                                             <Typography variant="subtitle2" sx={{ mb: 1 }}>Attached PDF Documents:</Typography>
                                             <Stack spacing={1}>
                                                 {proj.files.map((file, idx) => (
                                                     <Typography key={idx} variant="body2">
                                                         <a 
-                                                            href={URL.createObjectURL(file)} 
-                                                            download={file.name}
+                                                            href={getFileUrl(file)} 
+                                                            download={getFileName(file, idx)}
                                                             style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
                                                         >
-                                                            📎 Download {file.name}
+                                                            📎 Download {getFileName(file, idx)}
                                                         </a>
                                                     </Typography>
                                                 ))}
@@ -433,8 +585,8 @@ export default function RegularDashboard() {
                             </Card>
                         ))}
                     </Stack>
-                </section>
-            )}
+                )}
+            </section>
 
             {/* 1. Voluntary Increase Modal */}
             <Dialog open={openIncrease} onClose={() => setOpenIncrease(false)} fullWidth maxWidth="xs">
@@ -525,7 +677,7 @@ export default function RegularDashboard() {
                 </DialogActions>
             </Dialog>
 
-            {/* 3. Create Project Modal */}
+            {/* 3. Create / Edit Project Modal */}
             <Dialog open={openCreate} onClose={() => setOpenCreate(false)} fullWidth maxWidth="sm">
                 <DialogTitle>{editingProjectId ? "Edit Community Project" : "Propose Community Project"}</DialogTitle>
                 <DialogContent>
@@ -558,11 +710,11 @@ export default function RegularDashboard() {
                             onChange={(e) => setProjectData({...projectData, description: e.target.value})}
                         />
 
-                        {/* Multi Image Upload Feature */}
+                        {/* Multi Image Upload Feature with Removals */}
                         <Box>
                             <Typography variant="subtitle2" sx={{ mb: 1 }}>Images Upload</Typography>
                             <Button variant="outlined" component="label" sx={{ mb: 2 }}>
-                                Select Images
+                                Add Images
                                 <input 
                                     type="file" 
                                     hidden 
@@ -577,27 +729,39 @@ export default function RegularDashboard() {
                                 />
                             </Button>
                             
-                            {/* Preview multiple images inline */}
                             {projectData.images.length > 0 && (
                                 <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', p: 1 }}>
                                     {projectData.images.map((img, idx) => (
-                                        <Box key={idx} sx={{ height: 80, width: 80, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
+                                        <Box key={idx} sx={{ position: 'relative', height: 80, width: 80, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
                                             <img 
-                                                src={URL.createObjectURL(img)} 
+                                                src={getImageUrl(img)} 
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                 alt={`Preview ${idx}`}
                                             />
+                                            {/* X BUTTON TO REMOVE IMAGE */}
+                                            <IconButton 
+                                                size="small" 
+                                                onClick={() => removeImage(idx)}
+                                                sx={{ 
+                                                    position: 'absolute', top: 2, right: 2, 
+                                                    bgcolor: 'rgba(255,255,255,0.7)', 
+                                                    '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
+                                                    padding: '2px'
+                                                }}
+                                            >
+                                                <CloseIcon sx={{ fontSize: 16 }} color="error" />
+                                            </IconButton>
                                         </Box>
                                     ))}
                                 </Box>
                             )}
                         </Box>
 
-                        {/* Multi PDF File Upload Feature */}
+                        {/* Multi PDF File Upload Feature with Removals */}
                         <Box>
                             <Typography variant="subtitle2" sx={{ mb: 1 }}>PDF Upload</Typography>
                             <Button variant="outlined" component="label" sx={{ mb: 2 }}>
-                                Select PDF Files
+                                Add PDF Files
                                 <input 
                                     type="file" 
                                     hidden 
@@ -612,13 +776,18 @@ export default function RegularDashboard() {
                                 />
                             </Button>
                             
-                            {/* List selected PDF files */}
                             {projectData.files.length > 0 && (
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                     {projectData.files.map((file, idx) => (
-                                        <Typography key={idx} variant="body2" color="primary">
-                                            📎 {file.name}
-                                        </Typography>
+                                        <Box key={idx} display="flex" alignItems="center" gap={1}>
+                                            <Typography variant="body2" color="primary" sx={{ flexGrow: 1 }}>
+                                                📎 {getFileName(file, idx)}
+                                            </Typography>
+                                            {/* X BUTTON TO REMOVE FILE */}
+                                            <IconButton size="small" onClick={() => removeFile(idx)} color="error" title="Remove PDF">
+                                                <CloseIcon sx={{ fontSize: 18 }} />
+                                            </IconButton>
+                                        </Box>
                                     ))}
                                 </Box>
                             )}
@@ -628,7 +797,7 @@ export default function RegularDashboard() {
                         <Box>
                             <Typography variant="subtitle2" sx={{ mb: 1 }}>Location Map / Address</Typography>
                             <TextField 
-                                label="Project Address or Coordinates" 
+                                label="Project Coordinates from below selectable map" 
                                 fullWidth 
                                 value={projectData.address}
                                 onChange={(e) => setProjectData({...projectData, address: e.target.value})}

@@ -89,18 +89,41 @@ async function seedProblems() {
             const randomUser = faker.helpers.arrayElement(users);
             const categoryId = faker.helpers.arrayElement(categoryIds) as keyof typeof templates;
             
+            // We use the old 'todo' templates as the project_name
             const templateList = templates[categoryId];
-            const todo = faker.helpers.arrayElement(templateList);
-
+            const projectName = faker.helpers.arrayElement(templateList);
+            
+            // Generate dummy data for the new fields
+            const summarDesc = faker.lorem.paragraph();
+            const latitude = faker.location.latitude({ min: 47, max: 49, precision: 6 });
+            const longitude = faker.location.longitude({ min: 15, max: 17, precision: 6 });
+            const amountRaised = faker.number.float({ min: 0, max: 5000, fractionDigits: 2 });
+            const creatorWork = faker.datatype.boolean();
             const problemDate = faker.date.between({
                 from: randomUser.created_at,
                 to: new Date()
             });
 
             await pool.query(
-                `INSERT INTO open_problems (id, user_id, category_id, todo, created_at) 
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [id, randomUser.id, categoryId, todo, problemDate]
+                `INSERT INTO open_problems (
+                    id, user_id, category_id, project_name, summar_desc, 
+                    image_list, file_list, latitude, longitude, 
+                    amount_raised, creator_work, created_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                [
+                    id, 
+                    randomUser.id, 
+                    categoryId, 
+                    projectName, 
+                    summarDesc, 
+                    [],
+                    [],
+                    latitude, 
+                    longitude, 
+                    amountRaised, 
+                    creatorWork, 
+                    problemDate
+                ]
             );
 
             if (i % 100 === 0) console.log(`✅ ${i}/1000 problems created...`);
