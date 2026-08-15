@@ -1,19 +1,21 @@
 import { initDB, pool } from './db.ts';
 import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
-import { hashPassword } from './utils/authUtils.ts';
+import { hashPassword } from './utils/authUtils.ts'; // <-- Use YOUR app's hasher!
 
 async function seedCompanyUsers() {
     try {
         await initDB();
-
         console.log("🏢 Starting seeding process for 200 companyUsers...");
 
         for (let i = 1; i <= 200; i++) {
             const id = crypto.randomUUID();
             const username = faker.internet.username();
-            const email = faker.internet.email();
-            const hashedPassword = await hashPassword("versysecretfakehash");
+            const email = faker.internet.email().toLowerCase(); // <-- Forces lowercase!
+            
+            const plainTextPassword = 'password123';
+            const hashedPassword = await hashPassword(plainTextPassword); // <-- PERFECT HASH!
+            
             const taxNumber = faker.string.numeric(9);
             const companyName = faker.company.name();
             const randomDate = faker.date.between({ from: '2020-01-01T00:00:00.000Z', to: new Date() });

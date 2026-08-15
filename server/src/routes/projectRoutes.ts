@@ -206,13 +206,123 @@ router.get('/statuses', async (req, res) => {
     }
 });
 
-router.get('/community', async (req, res) => {
+router.get('/community', verifyToken, async (req, res) => {
     try {
-        const projects = await pool.query('SELECT * FROM open_problems ORDER BY created_at DESC');
+        const userId = (req as any).user?.id;
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
+        const projects = await pool.query(`
+            SELECT op.*, 
+                   CAST((SELECT COUNT(*) FROM project_approvals WHERE project_id = op.id) AS INTEGER) as approval_count,
+                   EXISTS(SELECT 1 FROM project_approvals WHERE project_id = op.id AND user_id = $1) as has_approved
+            FROM open_problems op
+            ORDER BY op.created_at DESC
+        `, [userId]);
         res.json({ projects: projects.rows });
     } catch (error) {
         console.error("Failed to fetch community projects", error);
         res.status(500).json({ error: 'Failed to fetch community projects' });
+    }
+});
+router.post('/:id/approve', verifyToken, async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        const userId = (req as any).user?.id;
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
+        
+        // 1. Insert approval (ON CONFLICT DO NOTHING prevents duplicate votes at the database level)
+        await pool.query(`
+            INSERT INTO project_approvals (project_id, user_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+        `, [projectId, userId]);
+        
+        // 2. Count total approvals for this project
+        const countRes = await pool.query(`SELECT COUNT(*) FROM project_approvals WHERE project_id = $1`, [projectId]);
+        const count = parseInt(countRes.rows[0].count, 10);
+        
+        // 3. If it reaches 3, upgrade the status automatically!
+        if (count >= 3) {
+            await pool.query(`UPDATE open_problems SET status = 'In Progress' WHERE id = $1 AND status = 'Proposed'`, [projectId]);
+        }
+        
+        res.json({ success: true, count });
+    } catch (error) {
+        console.error("Approval failed", error);
+        res.status(500).json({ error: "Failed to approve project" });
+    }
+});
+
+// POST ROUTE: Complete a Project
+router.post('/:id/complete', verifyToken, upload.fields([{ name: 'finalImages', maxCount: 10 }, { name: 'finalFiles', maxCount: 10 }]), async (req, res) => {
+    try {
+        const userId = (req as any).user?.id;
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+        const projectId = req.params.id;
+        const { summary, finalCost, completionDate, maintenanceNotes, rating } = req.body;
+        
+        // Security Check: Make sure they own the project and it's actually In Progress
+        const projectRes = await pool.query("SELECT * FROM open_problems WHERE id = $1 AND user_id = $2", [projectId, userId]);
+        if (projectRes.rows.length === 0) return res.status(404).json({ error: "Project not found or unauthorized" });
+        if (projectRes.rows[0].status !== 'In Progress') return res.status(400).json({ error: "Project must be 'In Progress' to complete" });
+
+        const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+        
+        // Upload images
+        const finalImageList: string[] = [];
+        if (files && files['finalImages']) {
+            for (const file of files['finalImages']) {
+                finalImageList.push(await uploadToS3(file, 'cleartax-image-uploads'));
+            }
+        }
+
+        // Upload documents
+        const finalFileList: string[] = [];
+        if (files && files['finalFiles']) {
+            for (const file of files['finalFiles']) {
+                finalFileList.push(await uploadToS3(file, 'cleartax-file-uploads'));
+            }
+        }
+
+        // 1. Insert the completion report
+        await pool.query(
+            `INSERT INTO project_completions 
+            (project_id, summary, final_cost, completion_date, maintenance_notes, rating, final_image_list, final_file_list) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (project_id) DO UPDATE SET
+            summary = EXCLUDED.summary, final_cost = EXCLUDED.final_cost, completion_date = EXCLUDED.completion_date,
+            maintenance_notes = EXCLUDED.maintenance_notes, rating = EXCLUDED.rating, 
+            final_image_list = EXCLUDED.final_image_list, final_file_list = EXCLUDED.final_file_list`,
+            [
+                projectId, summary, parseFloat(finalCost) || 0, completionDate || null, 
+                maintenanceNotes, parseInt(rating) || 0, finalImageList, finalFileList
+            ]
+        );
+
+        // 2. Change the project status to Completed
+        await pool.query("UPDATE open_problems SET status = 'Completed' WHERE id = $1", [projectId]);
+
+        res.status(200).json({ message: 'Project completed successfully' });
+    } catch (error) {
+        console.error("🔥 CRITICAL COMPLETION ERROR:", error);
+        res.status(500).json({ error: 'Failed to complete project' });
+    }
+});
+
+// GET ROUTE: Fetch Completion Data
+router.get('/:id/completion', verifyToken, async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        const result = await pool.query("SELECT * FROM project_completions WHERE project_id = $1", [projectId]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Completion report not found" });
+        }
+        
+        res.json({ completion: result.rows[0] });
+    } catch (error) {
+        console.error("Failed to fetch completion report", error);
+        res.status(500).json({ error: "Server error" });
     }
 });
 

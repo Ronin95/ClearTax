@@ -130,6 +130,29 @@ export async function initDB() {
             );
         `);
 
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS project_approvals (
+                project_id UUID REFERENCES open_problems(id) ON DELETE CASCADE,
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (project_id, user_id)
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS project_completions (
+                project_id UUID PRIMARY KEY REFERENCES open_problems(id) ON DELETE CASCADE,
+                summary TEXT,
+                final_cost DECIMAL(12, 2),
+                completion_date DATE,
+                maintenance_notes TEXT,
+                rating INTEGER,
+                final_image_list TEXT[] DEFAULT '{}',
+                final_file_list TEXT[] DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         client.release();
         console.log("✅ PostgreSQL Tables Initialized");
     } catch (err) {

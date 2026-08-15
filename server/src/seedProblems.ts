@@ -91,47 +91,51 @@ async function seedProblems() {
             process.exit(1);
         }
 
-        console.log(`🌱 Generating 1000 open problems (Citizens only) with relative dates and statuses...`);
+        console.log(`🌱 Generating unique open problems from templates...`);
 
-        for (let i = 1; i <= 1000; i++) {
-            const id = crypto.randomUUID();
-            const randomUser = faker.helpers.arrayElement(users);
-            const categoryId = faker.helpers.arrayElement(categoryIds) as keyof typeof templates;
-            const templateList = templates[categoryId];
-            const projectName = faker.helpers.arrayElement(templateList);
-            
-            const summarDesc = faker.lorem.paragraph();
-            // Adjusted coordinates slightly to be closer to Eastern Austria
-            const latitude = faker.location.latitude({ min: 47.5, max: 48.8, precision: 6 });
-            const longitude = faker.location.longitude({ min: 15.5, max: 17.0, precision: 6 });
-            const amountRaised = faker.number.float({ min: 0, max: 5000, fractionDigits: 2 });
-            const creatorWork = faker.datatype.boolean();
-            
-            // Randomly assign a status to seed data for testing
-            const status = faker.helpers.arrayElement(dbStatuses);
-            
-            const problemDate = faker.date.between({
-                from: randomUser.created_at,
-                to: new Date()
-            });
+        let count = 0;
+        
+        // Loop through each category in your templates
+        for (const categoryIdStr of Object.keys(templates)) {
+            const categoryId = parseInt(categoryIdStr);
+            if (!categoryIds.includes(categoryId)) continue;
 
-            await pool.query(
-                `INSERT INTO open_problems (
-                    id, user_id, category_id, project_name, summar_desc, 
-                    image_list, file_list, latitude, longitude, 
-                    amount_raised, creator_work, status, created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-                [
-                    id, randomUser.id, categoryId, projectName, summarDesc, 
-                    [], [], latitude, longitude, amountRaised, creatorWork, 
-                    status, problemDate
-                ]
-            );
+            const templateList = templates[categoryId as keyof typeof templates];
+            
+            // Loop through every exact project name exactly once
+            for (const projectName of templateList) {
+                count++;
+                const id = crypto.randomUUID();
+                const randomUser = faker.helpers.arrayElement(users);
+                
+                const summarDesc = faker.lorem.paragraph();
+                const latitude = faker.location.latitude({ min: 47.5, max: 48.8, precision: 6 });
+                const longitude = faker.location.longitude({ min: 15.5, max: 17.0, precision: 6 });
+                const amountRaised = faker.number.float({ min: 0, max: 5000, fractionDigits: 2 });
+                const creatorWork = faker.datatype.boolean();
+                const status = faker.helpers.arrayElement(dbStatuses);
+                
+                const problemDate = faker.date.between({
+                    from: randomUser.created_at,
+                    to: new Date()
+                });
 
-            if (i % 100 === 0) console.log(`✅ ${i}/1000 problems created...`);
+                await pool.query(
+                    `INSERT INTO open_problems (
+                        id, user_id, category_id, project_name, summar_desc, 
+                        image_list, file_list, latitude, longitude, 
+                        amount_raised, creator_work, status, created_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                    [
+                        id, randomUser.id, categoryId, projectName, summarDesc, 
+                        [], [], latitude, longitude, amountRaised, creatorWork, 
+                        status, problemDate
+                    ]
+                );
+            }
         }
 
-        console.log("🏁 Open Problems Successfully Seeded!");
+        console.log(`🏁 Successfully Seeded ${count} Unique Open Problems!`);
         process.exit(0);
     } catch (err) {
         console.error("❌ Seeding failed:", err);
