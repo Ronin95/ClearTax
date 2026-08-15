@@ -4,58 +4,58 @@ import crypto from 'crypto';
 
 const templates = {
     1: [ // Infrastructure
-        "Repair potholes on Silver Lining Boulevard",
-        "Replace broken swings at Whispering Willow Park playground",
-        "Fix the leaking roof at Archive House public library",
-        "Install new LED streetlights in the Ironworks District",
-        "Renovate the public restrooms at Crystal Creek Gardens",
-        "Repaint the fading crosswalks near Neon Avenue",
-        "Clear the storm drainage blockage on Ember Street",
-        "Restore the historical marble fountain at Solstice Plaza",
-        "Replace the outdated HVAC system in the Marble Hall Library",
-        "Reinforce the structural support beams of the Old Harbor Bridge",
-        "Re-turf the primary community soccer field at Aurora Heights Park",
-        "Update the exterior limestone facade of the Ironwood Civic Center",
-        "Install anti-slip heated pavement on Zenith Drive",
-        "Construct a sustainable cedar fence for the community garden in Echo Valley",
-        "Repair the cracked granite retaining wall at Mossy Lane",
-        "Refurbish the digital information kiosk at Verdant Vale"
+        "Repair potholes on the main street between Auersthal and Bockfließ",
+        "Replace broken swings at the Gänserndorf city park playground",
+        "Fix the leaking roof at the Mistelbach public library",
+        "Install new LED streetlights in the industrial district of Wolkersdorf",
+        "Renovate the public restrooms at the Donauinsel",
+        "Repaint the fading crosswalks near the Hauptplatz in Wiener Neustadt",
+        "Clear the storm drainage blockage on the B8 federal highway",
+        "Restore the historical fountain at the Rathausplatz in St. Pölten",
+        "Replace the outdated heating system in the local school in Strasshof",
+        "Reinforce the structural support beams of the bridge over the March river",
+        "Re-turf the primary community soccer field in Deutsch-Wagram",
+        "Update the exterior facade of the municipal building in Matzen",
+        "Install anti-slip pavement on the steep road in Kahlenberg",
+        "Construct a sustainable fence for the community garden in Schönkirchen",
+        "Repair the retaining wall along the vineyards in Poysdorf",
+        "Refurbish the digital information kiosk at the Retz train station"
     ],
     2: [ // Technology
-        "Install public high-speed Wi-Fi in Solstice Plaza",
-        "Upgrade the server hardware for Lunar Heights digital services",
-        "Implement smart traffic light sensors at the intersection of Zenith Drive",
-        "Digitize the permit application process for Glass Tower Station",
-        "Add solar-powered charging stations at Whispering Willow Park",
-        "Install air quality monitoring sensors around Circuit City",
-        "Deploy autonomous trash collection bins in the Ironworks District",
-        "Install emergency satellite communication hubs at Aurora Heights Park",
-        "Set up a VR historical tour terminal at Archive House",
-        "Launch an automated smart-irrigation system for Crystal Creek Gardens",
-        "Install biometric security gates at Ironwood Civic Center",
-        "Upgrade the high-capacity fiber optic backbone under Silver Lining Boulevard",
-        "Deploy AI-driven noise pollution sensors throughout Old Harbor",
-        "Install interactive touchscreen navigation maps at the Mossy Lane hub",
-        "Set up drone-delivery landing pads in the Echo Valley residential zone",
-        "Integrate smart parking meters with mobile payment along Neon Avenue"
+        "Install public high-speed Wi-Fi at the Stephansplatz",
+        "Upgrade the server hardware for the Lower Austria digital services",
+        "Implement smart traffic light sensors at the intersection in Kagran",
+        "Digitize the building permit application process for the municipality of Auersthal",
+        "Add solar-powered charging stations for e-bikes in the Weinviertel region",
+        "Install air quality monitoring sensors around the Schwechat refinery",
+        "Deploy smart trash collection bins in the Donauzentrum district",
+        "Install emergency communication hubs in the alpine region of Schneeberg",
+        "Set up a VR historical tour terminal at the Schönbrunn Palace",
+        "Launch an automated smart-irrigation system for the Burggarten",
+        "Install modern security gates at the Vienna International Centre",
+        "Upgrade the fiber optic backbone connecting Gänserndorf and Vienna",
+        "Deploy noise pollution sensors along the A23 Südosttangente",
+        "Install interactive touchscreen navigation maps at the Hauptbahnhof",
+        "Set up drone-delivery testing zones in the rural areas of Waldviertel",
+        "Integrate smart parking meters with the Handyparken app in Graz"
     ],
     3: [ // Transportation
-        "Expand bus frequency for the Lunar Heights line",
-        "Build a protected bike lane connecting Ember Street to downtown",
-        "Add an electric bus charging hub at Marble Hall Library",
-        "Improve the wayfinding signage at the Neon Avenue train station",
-        "Launch a community bike-sharing program in Circuit City",
-        "Repair the hydraulic elevators at the Silver Lining Boulevard subway entrance",
-        "Establish a pedestrian-only cobblestone zone on Cobblestone Way",
-        "Add a solar-powered water taxi terminal at the Old Harbor pier",
-        "Install weather-shielded seating at the Zenith Drive bus stop",
-        "Extend the magnetic levitation rail tracks through Echo Valley",
-        "Upgrade the automated signaling system for the Ironworks District metro",
-        "Create dedicated priority bus lanes along Silver Lining Boulevard",
-        "Construct a glass skywalk connecting Glass Tower Station to the city center",
-        "Install self-service bike repair stations at Verdant Vale",
-        "Launch a fleet of hydrogen-powered ferries at Crystal Creek Gardens",
-        "Implement a traffic-calming roundabout at the intersection of Mossy Lane"
+        "Expand bus frequency for the route between Auersthal and Bockfließ",
+        "Build a protected bike lane connecting Strasshof to the S-Bahn station",
+        "Add an electric bus charging hub at the Vienna Westbahnhof",
+        "Improve the wayfinding signage at the Wien Mitte train station",
+        "Launch a community Nextbike sharing program in Mistelbach",
+        "Repair the elevators at the U1 Karlsplatz subway entrance",
+        "Establish a pedestrian-only zone on the Mariahilfer Straße",
+        "Add a solar-powered terminal for the Twin City Liner at Schwedenplatz",
+        "Install weather-shielded seating at the regional bus stop in Groß-Enzersdorf",
+        "Extend the S-Bahn railway tracks towards the Slovakian border",
+        "Upgrade the automated signaling system for the U4 metro line",
+        "Create dedicated priority bus lanes along the Gürtel",
+        "Construct a pedestrian bridge connecting the Prater to the Handelskai",
+        "Install self-service bike repair stations along the Donauradweg",
+        "Launch a fleet of electric ferries at the Neusiedler See",
+        "Implement a traffic-calming roundabout at the main intersection in Zistersdorf"
     ]
 };
 
@@ -63,7 +63,7 @@ async function seedProblems() {
     try {
         await initDB();
         
-        const usersRes = await pool.query('SELECT id, created_at FROM users WHERE role_id = 1;');
+                const usersRes = await pool.query('SELECT id, created_at FROM users WHERE role_id = 1;');
         const users = usersRes.rows;
 
         const catsRes = await pool.query('SELECT id FROM funding_categories;');
@@ -71,6 +71,15 @@ async function seedProblems() {
         const categoryIds = catsRes.rows
             .map(r => r.id)
             .filter(id => id in templates); 
+
+        // NEW: Fetch all valid status names directly from the database table
+        const statusesRes = await pool.query('SELECT name FROM project_statuses;');
+        const dbStatuses = statusesRes.rows.map(r => r.name);
+
+        if (dbStatuses.length === 0) {
+            console.error("❌ ERROR: No statuses found in project_statuses table. Did you update initDB?");
+            process.exit(1);
+        }
 
         if (users.length === 0) {
             console.error("❌ ERROR: No regular users found. Please run seedUsersRegular.ts first.");
@@ -82,23 +91,25 @@ async function seedProblems() {
             process.exit(1);
         }
 
-        console.log(`🌱 Generating 1000 open problems (Citizens only) with relative dates...`);
+        console.log(`🌱 Generating 1000 open problems (Citizens only) with relative dates and statuses...`);
 
         for (let i = 1; i <= 1000; i++) {
             const id = crypto.randomUUID();
             const randomUser = faker.helpers.arrayElement(users);
             const categoryId = faker.helpers.arrayElement(categoryIds) as keyof typeof templates;
-            
-            // We use the old 'todo' templates as the project_name
             const templateList = templates[categoryId];
             const projectName = faker.helpers.arrayElement(templateList);
             
-            // Generate dummy data for the new fields
             const summarDesc = faker.lorem.paragraph();
-            const latitude = faker.location.latitude({ min: 47, max: 49, precision: 6 });
-            const longitude = faker.location.longitude({ min: 15, max: 17, precision: 6 });
+            // Adjusted coordinates slightly to be closer to Eastern Austria
+            const latitude = faker.location.latitude({ min: 47.5, max: 48.8, precision: 6 });
+            const longitude = faker.location.longitude({ min: 15.5, max: 17.0, precision: 6 });
             const amountRaised = faker.number.float({ min: 0, max: 5000, fractionDigits: 2 });
             const creatorWork = faker.datatype.boolean();
+            
+            // Randomly assign a status to seed data for testing
+            const status = faker.helpers.arrayElement(dbStatuses);
+            
             const problemDate = faker.date.between({
                 from: randomUser.created_at,
                 to: new Date()
@@ -108,21 +119,12 @@ async function seedProblems() {
                 `INSERT INTO open_problems (
                     id, user_id, category_id, project_name, summar_desc, 
                     image_list, file_list, latitude, longitude, 
-                    amount_raised, creator_work, created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                    amount_raised, creator_work, status, created_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
                 [
-                    id, 
-                    randomUser.id, 
-                    categoryId, 
-                    projectName, 
-                    summarDesc, 
-                    [],
-                    [],
-                    latitude, 
-                    longitude, 
-                    amountRaised, 
-                    creatorWork, 
-                    problemDate
+                    id, randomUser.id, categoryId, projectName, summarDesc, 
+                    [], [], latitude, longitude, amountRaised, creatorWork, 
+                    status, problemDate
                 ]
             );
 

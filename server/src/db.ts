@@ -8,9 +8,31 @@ export async function initDB() {
         const client = await pool.connect();
         console.log("✅ Successfully connected to PostgreSQL");
 
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS project_statuses (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(50) UNIQUE NOT NULL,
+                color VARCHAR(20) NOT NULL DEFAULT 'default'
+            );
+        `);
+
+        const defaultStatuses = [
+            { name: 'Proposed', color: 'default' },
+            { name: 'Approved', color: 'info' },
+            { name: 'In Progress', color: 'warning' },
+            { name: 'Completed', color: 'success' }
+        ];
+        for (const status of defaultStatuses) {
+            await pool.query(`
+                INSERT INTO project_statuses (name, color) 
+                VALUES ($1, $2) 
+                ON CONFLICT (name) DO UPDATE SET color = EXCLUDED.color;
+            `, [status.name, status.color]);
+        }
+
         // Roles Table
-        await pool.query(
-            `CREATE TABLE IF NOT EXISTS user_roles (
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS user_roles (
                 id INTEGER PRIMARY KEY,
                 name VARCHAR(64) UNIQUE
             );
@@ -103,6 +125,7 @@ export async function initDB() {
                 longitude DECIMAL(10, 6),
                 amount_raised DECIMAL(12, 2) DEFAULT 0.00,
                 creator_work BOOLEAN DEFAULT false,
+                status VARCHAR(50) REFERENCES project_statuses(name),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);

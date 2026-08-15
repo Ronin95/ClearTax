@@ -3,7 +3,7 @@ import {
     Container, Typography, Card, CardContent, Button, Box,
     Dialog, DialogTitle, DialogContent, DialogActions, TextField, 
     MenuItem, FormControl, InputLabel, Select, Stack, CircularProgress, Alert,
-    Switch, FormControlLabel, FormGroup, IconButton
+    Switch, FormControlLabel, FormGroup, IconButton, Tabs, Tab, Pagination
 } from "@mui/material";
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -13,7 +13,8 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import CloseIcon from '@mui/icons-material/Close'; // IMPORTED CLOSE ICON
+import CloseIcon from '@mui/icons-material/Close';
+import Chip from '@mui/material/Chip';
 import axios from 'axios';
 import { Image } from 'mui-image';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
@@ -40,6 +41,35 @@ interface ProjectData {
     address: string;
     contributionAmount: string | number;
     ownTaxes: boolean;
+    status: string;
+    created_at?: string;
+}
+
+interface TabPanelProps {
+    children?: React.ReactNode;
+    index: number;
+    value: number;
+}
+
+function CustomTabPanel(props: TabPanelProps) {
+    const { children, value, index, ...other } = props;
+    return (
+        <div
+            role="tabpanel"
+            hidden={value !== index}
+            id={`project-tabpanel-${index}`}
+            aria-labelledby={`project-tab-${index}`}
+            {...other}
+        >
+            {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+        </div>
+    );
+}
+function a11yProps(index: number) {
+    return {
+        id: `project-tab-${index}`,
+        'aria-controls': `project-tabpanel-${index}`,
+    };
 }
 
 // Map settings
@@ -47,6 +77,11 @@ const mapContainerStyle = { width: '100%', height: '400px', borderRadius: '8px',
 const defaultCenter = { lat: 48.2082, lng: 16.3738 }; // Default: Vienna, Austria
 
 export default function RegularDashboard() {
+    interface StatusOption {
+        name: string;
+        color: string;
+    }
+
     const [debtStats, setDebtStats] = useState({ number_of_people: 0, amount_paid: 0 });
     const [solidarityInput, setSolidarityInput] = useState<string>('');
     const [isSubmittingDebt, setIsSubmittingDebt] = useState(false);
@@ -66,23 +101,20 @@ export default function RegularDashboard() {
     
     // 3. Updated Project Data State
     const [projectData, setProjectData] = useState<ProjectData>({ 
-        id: '',
-        title: '', 
-        category: 'Infrastructure', 
-        description: '',
-        images: [],
-        files: [],
-        address: '',
-        contributionAmount: '',
-        ownTaxes: false
+        id: '', title: '', category: 'Infrastructure', description: '',
+        images: [], files: [], address: '', contributionAmount: '', ownTaxes: false, status: 'Proposed'
     });
 
+    const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
     const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
     const [submittedProjects, setSubmittedProjects] = useState<ProjectData[]>([]);
-
+    const [communityProjects, setCommunityProjects] = useState<ProjectData[]>([]);
     const [risAvailable, setRisAvailable] = useState<number | null>(null);
-    const [manualAmount, setManualAmount] = useState<number | string>('');
-    const [syncError, setSyncError] = useState<string | null>(null);
+    
+    const [tabValue, setTabValue] = useState(0);
+    const [myProjectsPage, setMyProjectsPage] = useState(1);
+    const [communityProjectsPage, setCommunityProjectsPage] = useState(1);
+    const PROJECTS_PER_PAGE = 5;
 
     // Google Maps API Loader
     const { isLoaded } = useJsApiLoader({
@@ -90,24 +122,48 @@ export default function RegularDashboard() {
         googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY || ''
     });
 
+    useEffect(() => {
+        const fetchStatuses = async () => {
+            try {
+                const response = await axios.get('http://localhost:3001/api/projects/statuses');
+                setStatusOptions(response.data.statuses);
+            } catch (err) {
+                console.error("Failed to fetch statuses", err);
+            }
+        };
+        fetchStatuses();
+    }, []);
+
+    const formatProjects = (projectsFromDB: any[]) => {
+        return projectsFromDB.map((p: any) => ({
+            id: p.id,
+            title: p.project_name || p.title || '',                     
+            category: p.category_id === 2 ? 'Technology' : p.category_id === 3 ? 'Transportation' : 'Infrastructure',
+            description: p.summar_desc || p.description || '',          
+            images: p.image_list || p.images || [],                     
+            files: p.file_list || p.files || [],                        
+            address: (p.latitude && p.longitude) ? `${p.latitude}, ${p.longitude}` : '', 
+            contributionAmount: p.amount_raised || p.contributionAmount || 0, 
+            ownTaxes: p.creator_work === true,                          
+            status: p.status || 'Proposed',
+            created_at: p.created_at
+        }));
+    };
     const fetchProjects = async () => {
         try {
-            const response = await axios.get('http://localhost:3001/api/projects', { withCredentials: true });
-            const projectsFromDB = response.data.projects || response.data;
+            const [myRes, communityRes] = await Promise.all([
+                axios.get('http://localhost:3001/api/projects', { withCredentials: true }),
+                axios.get('http://localhost:3001/api/projects/community', { withCredentials: true })
+            ]);
             
-            if (Array.isArray(projectsFromDB)) {
-                const formattedProjects = projectsFromDB.map((p: any) => ({
-                    id: p.id,
-                    title: p.project_name || p.title || '',                     // DB: project_name
-                    category: p.category_id === 2 ? 'Technology' : p.category_id === 3 ? 'Transportation' : 'Infrastructure',
-                    description: p.summar_desc || p.description || '',          // DB: summar_desc
-                    images: p.image_list || p.images || [],                     // DB: image_list
-                    files: p.file_list || p.files || [],                        // DB: file_list
-                    address: (p.latitude && p.longitude) ? `${p.latitude}, ${p.longitude}` : '', 
-                    contributionAmount: p.amount_raised || p.contributionAmount || 0, // DB: amount_raised
-                    ownTaxes: p.creator_work === true                           // DB: creator_work
-                }));
-                setSubmittedProjects(formattedProjects);
+            const myProjectsFromDB = myRes.data.projects || myRes.data;
+            if (Array.isArray(myProjectsFromDB)) {
+                setSubmittedProjects(formatProjects(myProjectsFromDB));
+            }
+            
+            const commProjectsFromDB = communityRes.data.projects || communityRes.data;
+            if (Array.isArray(commProjectsFromDB)) {
+                setCommunityProjects(formatProjects(commProjectsFromDB));
             }
         } catch (err) {
             console.error("Failed to fetch projects from backend", err);
@@ -245,7 +301,7 @@ export default function RegularDashboard() {
         setEditingProjectId(null);
         setProjectData({
             id: '', title: '', category: 'Infrastructure', description: '',
-            images: [], files: [], address: '', contributionAmount: '', ownTaxes: false
+            images: [], files: [], address: '', contributionAmount: '', ownTaxes: false, status: 'Proposed'
         });
         setOpenCreate(true);
     };
@@ -276,6 +332,7 @@ export default function RegularDashboard() {
         
         const catMap: Record<string, number> = { 'Infrastructure': 1, 'Technology': 2, 'Transportation': 3 };
         formData.append('category_id', catMap[projectData.category]?.toString() || '1');
+        formData.append('status', projectData.status);
 
         const parts = projectData.address.split(',');
         if (parts.length === 2) {
@@ -319,7 +376,7 @@ export default function RegularDashboard() {
             setOpenCreate(false);
             setProjectData({
                 id: '', title: '', category: 'Infrastructure', description: '',
-                images: [], files: [], address: '', contributionAmount: '', ownTaxes: false
+                images: [], files: [], address: '', contributionAmount: '', ownTaxes: false, status: 'Proposed'
             });
             
         } catch (error) {
@@ -347,6 +404,8 @@ export default function RegularDashboard() {
             
             // Remove from UI instantly
             setSubmittedProjects(prev => prev.filter(p => p.id !== id));
+            const newTotalPages = Math.ceil((submittedProjects.length - 1) / PROJECTS_PER_PAGE);
+            if (myProjectsPage > newTotalPages && newTotalPages > 0) setMyProjectsPage(newTotalPages);
         } catch (error) {
             console.error("Failed to delete project", error);
             alert("Failed to delete the project.");
@@ -403,6 +462,40 @@ export default function RegularDashboard() {
         
         if (file && file.name) return file.name;
         return `Document_${idx + 1}.pdf`;
+    };
+
+    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+        setTabValue(newValue);
+    };
+    // --- PAGINATION CALCULATIONS ---
+    const myTotalPages = Math.ceil(submittedProjects.length / PROJECTS_PER_PAGE);
+    const displayedMyProjects = submittedProjects.slice(
+        (myProjectsPage - 1) * PROJECTS_PER_PAGE, 
+        myProjectsPage * PROJECTS_PER_PAGE
+    );
+    const communityTotalPages = Math.ceil(communityProjects.length / PROJECTS_PER_PAGE);
+    const displayedCommunityProjects = communityProjects.slice(
+        (communityProjectsPage - 1) * PROJECTS_PER_PAGE, 
+        communityProjectsPage * PROJECTS_PER_PAGE
+    );
+
+    const formatDate = (dateString?: string) => {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Invalid Date';
+        
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        const hh = String(date.getHours()).padStart(2, '0');
+        const min = String(date.getMinutes()).padStart(2, '0');
+        
+        return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+    };
+
+    const getStatusColor = (statusName: string) => {
+        const foundStatus = statusOptions.find(s => s.name === statusName);
+        return foundStatus ? foundStatus.color : 'default';
     };
 
     return (
@@ -483,109 +576,227 @@ export default function RegularDashboard() {
                 </section>
             </section>
 
-            {/* Render Newly Created Projects */}
             <section style={{ marginTop: '40px' }}>
-                <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
-                    My Proposed Projects
-                </Typography>
-                
-                {submittedProjects.length === 0 ? (
-                    <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
-                        <CardContent sx={{ textAlign: 'center', py: 5 }}>
-                            <Typography variant="body1" color="text.secondary">
-                                No projects created.
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    <Stack spacing={3}>
-                        {submittedProjects.map((proj) => (
-                            <Card key={proj.id} variant="outlined">
-                                <CardContent sx={{ position: 'relative' }}>
-                                    
-                                    {/* Action Buttons */}
-                                    <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 1 }}>
-                                        <IconButton size="small" onClick={() => handleEditProject(proj.id)} color="primary">
-                                            <EditIcon />
-                                        </IconButton>
-                                        <IconButton size="small" onClick={() => handleDeleteProject(proj.id)} color="error">
-                                            <DeleteIcon />
-                                        </IconButton>
-                                    </Box>
-
-                                    <Typography variant="h6" fontWeight="bold" sx={{ pr: 10 }}>{proj.title}</Typography>
-                                    <Typography color="primary" variant="subtitle2" gutterBottom>{proj.category}</Typography>
-                                    <Typography variant="body2" sx={{ mb: 2 }}>{proj.description}</Typography>
-                                    
-                                    <Box display="flex" alignItems="center" gap={1}>
-                                        <Typography variant="body2" color="text.secondary">
-                                            <strong>Location:</strong> {proj.address || 'Not specified'}
-                                        </Typography>
-                                        {proj.address && (
-                                            <Button
-                                                size="small"
-                                                variant="text"
-                                                color="primary"
-                                                endIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
-                                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(proj.address)}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                sx={{ p: 0, minWidth: 'auto', textTransform: 'none', fontWeight: 'bold' }}
-                                            >
-                                                View on Maps
-                                            </Button>
-                                        )}
-                                    </Box>
-
-                                    <Typography variant="body2" color="text.secondary">
-                                        <strong>Contribution:</strong> €{Number(proj.contributionAmount).toLocaleString('de-AT', { minimumFractionDigits: 2 })}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        <strong>Using Own Taxes:</strong> {proj.ownTaxes ? 'Yes' : 'No'}
-                                    </Typography>
-
-                                    {/* Multi-Image Display */}
-                                    {proj.images && proj.images.length > 0 && (
-                                        <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', mt: 3 }}>
-                                            {proj.images.map((img, idx) => (
-                                                <Box key={idx} sx={{ width: 250, height: 200, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
-                                                    <Image 
-                                                        src={getImageUrl(img)} 
-                                                        fit="cover" 
-                                                        duration={500} 
-                                                        alt={`Project upload ${idx}`}
-                                                    />
+                <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                    <Tabs value={tabValue} onChange={handleTabChange} aria-label="project tabs">
+                        <Tab label="My Proposed Projects" {...a11yProps(0)} />
+                        <Tab label="Community Proposed Projects" {...a11yProps(1)} />
+                    </Tabs>
+                </Box>
+                {/* TAB 1: My Proposed Projects */}
+                <CustomTabPanel value={tabValue} index={0}>
+                    {submittedProjects.length === 0 ? (
+                        <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                            <CardContent sx={{ textAlign: 'center', py: 5 }}>
+                                <Typography variant="body1" color="text.secondary">
+                                    No projects created.
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <>
+                            <Stack spacing={3}>
+                                {displayedMyProjects.map((proj) => (
+                                    <Card key={proj.id} variant="outlined">
+                                        <CardContent sx={{ position: 'relative' }}>
+                                            
+                                            {/* Action Buttons & Status Badge */}
+                                            <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Chip 
+                                                    label={proj.status} 
+                                                    color={getStatusColor(proj.status) as any} 
+                                                    size="small" 
+                                                    sx={{ fontWeight: 'bold' }}
+                                                />
+                                                <IconButton size="small" onClick={() => handleEditProject(proj.id)} color="primary">
+                                                    <EditIcon />
+                                                </IconButton>
+                                                <IconButton size="small" onClick={() => handleDeleteProject(proj.id)} color="error">
+                                                    <DeleteIcon />
+                                                </IconButton>
+                                            </Box>
+                                            <Typography variant="h6" fontWeight="bold" sx={{ pr: 20 }}>{proj.title}</Typography>
+                                            <Typography color="primary" variant="subtitle2" gutterBottom>{proj.category}</Typography>
+                                            <Typography variant="body2" sx={{ mb: 2 }}>{proj.description}</Typography>
+                                            
+                                            <Box display="flex" alignItems="center" gap={1}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    <strong>Location:</strong> {proj.address || 'Not specified'}
+                                                </Typography>
+                                                {proj.address && (
+                                                    <Button
+                                                        size="small" variant="text" color="primary"
+                                                        endIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
+                                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(proj.address)}`}
+                                                        target="_blank" rel="noopener noreferrer"
+                                                        sx={{ p: 0, minWidth: 'auto', textTransform: 'none', fontWeight: 'bold' }}
+                                                    >
+                                                        View on Maps
+                                                    </Button>
+                                                )}
+                                            </Box>
+                                            <Typography variant="body2" color="text.secondary">
+                                                <strong>Contribution:</strong> €{Number(proj.contributionAmount).toLocaleString('de-AT', { minimumFractionDigits: 2 })}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                <strong>Using Own Taxes:</strong> {proj.ownTaxes ? 'Yes' : 'No'}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                <strong>Created at date:</strong> {formatDate(proj.created_at)}
+                                            </Typography>
+                                            {/* Multi-Image Display */}
+                                            {proj.images && proj.images.length > 0 && (
+                                                <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', mt: 3 }}>
+                                                    {proj.images.map((img, idx) => (
+                                                        <Box key={idx} sx={{ width: 250, height: 200, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
+                                                            <Image src={getImageUrl(img)} fit="cover" duration={500} alt={`Project upload ${idx}`} />
+                                                        </Box>
+                                                    ))}
                                                 </Box>
-                                            ))}
-                                        </Box>
-                                    )}
-
-                                    {/* PDF Download Links */}
-                                    {proj.files && proj.files.length > 0 && (
-                                        <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #eee' }}>
-                                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Attached PDF Documents:</Typography>
-                                            <Stack spacing={1}>
-                                                {proj.files.map((file, idx) => (
-                                                    <Typography key={idx} variant="body2">
-                                                        <a 
-                                                            href={getFileUrl(file)} 
-                                                            download={getFileName(file, idx)}
-                                                            style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                        >
-                                                            📎 Download {getFileName(file, idx)}
-                                                        </a>
-                                                    </Typography>
-                                                ))}
-                                            </Stack>
-                                        </Box>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </Stack>
-                )}
+                                            )}
+                                            {/* PDF Download Links */}
+                                            {proj.files && proj.files.length > 0 && (
+                                                <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #eee' }}>
+                                                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Attached PDF Documents:</Typography>
+                                                    <Stack spacing={1}>
+                                                        {proj.files.map((file, idx) => (
+                                                            <Typography key={idx} variant="body2">
+                                                                <a 
+                                                                    href={getFileUrl(file)} download={getFileName(file, idx)} 
+                                                                    style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }} 
+                                                                    target="_blank" rel="noopener noreferrer"
+                                                                >
+                                                                    📎 Download {getFileName(file, idx)}
+                                                                </a>
+                                                            </Typography>
+                                                        ))}
+                                                    </Stack>
+                                                </Box>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
+                            {/* PAGINATION CONTROLS */}
+                            {myTotalPages > 1 && (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                                    <Pagination 
+                                        count={myTotalPages} 
+                                        page={myProjectsPage} 
+                                        onChange={(e, val) => setMyProjectsPage(val)} 
+                                        color="primary" 
+                                        size="large"
+                                    />
+                                </Box>
+                            )}
+                        </>
+                    )}
+                </CustomTabPanel>
+                {/* TAB 2: Community Proposed Projects */}
+                <CustomTabPanel value={tabValue} index={1}>
+                    {communityProjects.length === 0 ? (
+                        <Card variant="outlined" sx={{ bgcolor: 'grey.50' }}>
+                            <CardContent sx={{ textAlign: 'center', py: 5 }}>
+                                <Typography variant="body1" color="text.secondary">
+                                    No community projects available yet.
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <>
+                            <Stack spacing={3}>
+                                {displayedCommunityProjects.map((proj) => (
+                                    <Card key={proj.id} variant="outlined">
+                                        <CardContent sx={{ position: 'relative' }}>
+                                            
+                                            {/* Status Badge */}
+                                            <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Chip 
+                                                    label={proj.status} 
+                                                    color={getStatusColor(proj.status) as any} 
+                                                    size="small" 
+                                                    sx={{ fontWeight: 'bold' }}
+                                                />
+                                            </Box>
+                                            <Typography variant="h6" fontWeight="bold" sx={{ pr: 10 }}>{proj.title}</Typography>
+                                            <Typography color="primary" variant="subtitle2" gutterBottom>{proj.category}</Typography>
+                                            <Typography variant="body2" sx={{ mb: 2 }}>{proj.description}</Typography>
+                                            
+                                            <Box display="flex" alignItems="center" gap={1}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    <strong>Location:</strong> {proj.address || 'Not specified'}
+                                                </Typography>
+                                                {proj.address && (
+                                                    <Button
+                                                        size="small" variant="text" color="primary"
+                                                        endIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
+                                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(proj.address)}`}
+                                                        target="_blank" rel="noopener noreferrer"
+                                                        sx={{ p: 0, minWidth: 'auto', textTransform: 'none', fontWeight: 'bold' }}
+                                                    >
+                                                        View on Maps
+                                                    </Button>
+                                                )}
+                                            </Box>
+                                            <Typography variant="body2" color="text.secondary">
+                                                <strong>Contribution:</strong> €{Number(proj.contributionAmount).toLocaleString('de-AT', { minimumFractionDigits: 2 })}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                <strong>Using Own Taxes:</strong> {proj.ownTaxes ? 'Yes' : 'No'}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                <strong>Created at date:</strong> {formatDate(proj.created_at)}
+                                            </Typography>
+                                            
+                                            {/* Multi-Image Display */}
+                                            {proj.images && proj.images.length > 0 && (
+                                                <Box sx={{ display: 'flex', gap: 2, overflowX: 'auto', mt: 3 }}>
+                                                    {proj.images.map((img, idx) => (
+                                                        <Box key={idx} sx={{ width: 250, height: 200, flexShrink: 0, overflow: 'hidden', borderRadius: 1 }}>
+                                                            <Image src={getImageUrl(img)} fit="cover" duration={500} alt={`Project upload ${idx}`} />
+                                                        </Box>
+                                                    ))}
+                                                </Box>
+                                            )}
+                                            
+                                            {/* PDF Download Links */}
+                                            {proj.files && proj.files.length > 0 && (
+                                                <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #eee' }}>
+                                                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Attached PDF Documents:</Typography>
+                                                    <Stack spacing={1}>
+                                                        {proj.files.map((file, idx) => (
+                                                            <Typography key={idx} variant="body2">
+                                                                <a 
+                                                                    href={getFileUrl(file)} download={getFileName(file, idx)} 
+                                                                    style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }} 
+                                                                    target="_blank" rel="noopener noreferrer"
+                                                                >
+                                                                    📎 Download {getFileName(file, idx)}
+                                                                </a>
+                                                            </Typography>
+                                                        ))}
+                                                    </Stack>
+                                                </Box>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
+                            {/* PAGINATION CONTROLS */}
+                            {communityTotalPages > 1 && (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                                    <Pagination 
+                                        count={communityTotalPages} 
+                                        page={communityProjectsPage} 
+                                        onChange={(e, val) => setCommunityProjectsPage(val)} 
+                                        color="primary" 
+                                        size="large"
+                                    />
+                                </Box>
+                            )}
+                        </>
+                    )}
+                </CustomTabPanel>
             </section>
 
             {/* 1. Voluntary Increase Modal */}
@@ -682,6 +893,24 @@ export default function RegularDashboard() {
                 <DialogTitle>{editingProjectId ? "Edit Community Project" : "Propose Community Project"}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={3} sx={{ mt: 1 }}>
+                        
+                        {/* NEW: Project Status Dropdown (ONLY visible when editing) */}
+                        {editingProjectId && (
+                            <FormControl fullWidth>
+                                <InputLabel>Project Status</InputLabel>
+                                <Select
+                                    value={projectData.status}
+                                    label="Project Status"
+                                    onChange={(e) => setProjectData({...projectData, status: e.target.value as string})}
+                                >
+                                    {statusOptions.map((statusOption) => (
+                                        <MenuItem key={statusOption.name} value={statusOption.name}>
+                                            {statusOption.name}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        )}
                         <TextField 
                             label="Project Title" 
                             fullWidth 

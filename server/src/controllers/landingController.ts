@@ -46,16 +46,17 @@ export const getOpenProblems = async (req: Request, res: Response) => {
     try {
         const result = await pool.query(`
             SELECT 
-                p.todo, 
+                op.project_name AS todo,
                 fc.name AS "areaOfInvestment"
-            FROM open_problems p
-            JOIN funding_categories fc ON p.category_id = fc.id
-            ORDER BY p.created_at DESC
-            LIMIT 50;
+            FROM open_problems op
+            LEFT JOIN funding_categories fc ON op.category_id = fc.id
+            ORDER BY RANDOM()
+            LIMIT 10;
         `);
         res.json(result.rows);
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
+    } catch (error) {
+        console.error("Error fetching open problems:", error);
+        res.status(500).json({ error: "Failed to fetch open problems" });
     }
 };
 

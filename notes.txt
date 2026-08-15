@@ -81,8 +81,9 @@ docker exec cleartax_garage /garage bucket create cleartax-image-uploads
 
 docker exec cleartax_garage /garage bucket create cleartax-file-uploads
 
-docker exec cleartax_garage /garage key create cleartax-api-key
+docker exec cleartax_garage /garage key create cleartax-s3
+- after this step update keys in .env
 
-docker exec cleartax_garage /garage bucket allow cleartax-image-uploads --read --write --owner --key cleartax-api-key
+docker exec cleartax_garage /garage bucket allow cleartax-image-uploads --read --write --owner --key cleartax-s3
 
-docker exec cleartax_garage /garage bucket allow cleartax-file-uploads --read --write --owner --key cleartax-api-key
+docker exec cleartax_garage /garage bucket allow cleartax-file-uploads --read --write --owner --key cleartax-s3

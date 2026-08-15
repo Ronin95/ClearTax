@@ -21,11 +21,7 @@ const s3 = new S3Client({
 
 const uploadToS3 = async (file: Express.Multer.File, bucketName: string) => {
     const fileId = crypto.randomUUID();
-    
-    // Clean the original filename to remove spaces or weird characters for S3 safety
     const safeOriginalName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    
-    // Combine the UUID and the safe original name
     const key = `${fileId}_${safeOriginalName}`;
 
     await s3.send(new PutObjectCommand({
@@ -37,13 +33,9 @@ const uploadToS3 = async (file: Express.Multer.File, bucketName: string) => {
     return key;
 };
 
-// NEW: Helper to securely delete files from Garage S3
 const deleteFromS3 = async (key: string, bucketName: string) => {
     try {
-        await s3.send(new DeleteObjectCommand({
-            Bucket: bucketName,
-            Key: key
-        }));
+        await s3.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
     } catch (err) {
         console.error(`Failed to delete ${key} from ${bucketName}:`, err);
     }
@@ -58,7 +50,6 @@ router.get('/', verifyToken, async (req, res) => {
         const projects = await pool.query('SELECT * FROM open_problems WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
         res.json({ projects: projects.rows });
     } catch (error) {
-        console.error("Failed to fetch projects:", error);
         res.status(500).json({ error: 'Failed to fetch projects' });
     }
 });
@@ -83,7 +74,7 @@ router.post('/', verifyToken, upload.fields([{ name: 'images', maxCount: 10 }, {
         const userId = (req as any).user?.id;
         if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-        const { title, category_id, description, latitude, longitude, contributionAmount, ownTaxes } = req.body;
+                const { title, category_id, description, latitude, longitude, contributionAmount, ownTaxes, status } = req.body;
         const files = req.files as { [fieldname: string]: Express.Multer.File[] };
         
         const imageList: string[] = [];
@@ -98,14 +89,28 @@ router.post('/', verifyToken, upload.fields([{ name: 'images', maxCount: 10 }, {
 
         const projectId = crypto.randomUUID();
         await pool.query(
-            `INSERT INTO open_problems (id, user_id, category_id, project_name, summar_desc, image_list, file_list, latitude, longitude, amount_raised, creator_work) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-            [projectId, userId, parseInt(category_id) || 1, title, description, imageList, fileList, parseFloat(latitude) || null, parseFloat(longitude) || null, parseFloat(contributionAmount) || 0, ownTaxes === 'true']
+            `INSERT INTO open_problems 
+            (id, user_id, category_id, project_name, summar_desc, image_list, file_list, latitude, longitude, amount_raised, creator_work, status) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [
+                projectId, 
+                userId, 
+                parseInt(category_id) || 1, 
+                title, 
+                description, 
+                imageList, 
+                fileList, 
+                latitude ? parseFloat(latitude) : null, 
+                longitude ? parseFloat(longitude) : null, 
+                parseFloat(contributionAmount) || 0, 
+                ownTaxes === 'true', 
+                status || 'Proposed'
+            ]
         );
 
         res.status(201).json({ message: 'Project created successfully', projectId });
     } catch (error) {
-        console.error("Project creation failed:", error);
+        console.error("🔥 CRITICAL DB ERROR:", error);
         res.status(500).json({ error: 'Failed to create project' });
     }
 });
@@ -120,20 +125,17 @@ router.put('/:id', verifyToken, upload.fields([{ name: 'images', maxCount: 10 },
         if (projectRes.rows.length === 0) return res.status(404).json({ error: "Project not found" });
         const oldProject = projectRes.rows[0];
 
-        const { title, category_id, description, latitude, longitude, contributionAmount, ownTaxes } = req.body;
+        const { title, category_id, description, latitude, longitude, contributionAmount, ownTaxes, status } = req.body;
         
-        // Find which files were kept vs removed
         const keptImages = req.body.existingImages ? JSON.parse(req.body.existingImages) : [];
         const keptFiles = req.body.existingFiles ? JSON.parse(req.body.existingFiles) : [];
 
         const imagesToDelete = (oldProject.image_list || []).filter((img: string) => !keptImages.includes(img));
         const filesToDelete = (oldProject.file_list || []).filter((f: string) => !keptFiles.includes(f));
 
-        // Delete removed files from S3
         for (const img of imagesToDelete) await deleteFromS3(img, 'cleartax-image-uploads');
         for (const f of filesToDelete) await deleteFromS3(f, 'cleartax-file-uploads');
 
-        // Upload newly added files
         const files = req.files as { [fieldname: string]: Express.Multer.File[] };
         const newImages: string[] = [];
         if (files && files['images']) {
@@ -152,15 +154,19 @@ router.put('/:id', verifyToken, upload.fields([{ name: 'images', maxCount: 10 },
             `UPDATE open_problems SET 
                 category_id = $1, project_name = $2, summar_desc = $3, 
                 image_list = $4, file_list = $5, latitude = $6, longitude = $7, 
-                amount_raised = $8, creator_work = $9
-            WHERE id = $10`,
-            [parseInt(category_id) || 1, title, description, finalImageList, finalFileList, parseFloat(latitude) || null, parseFloat(longitude) || null, parseFloat(contributionAmount) || 0, ownTaxes === 'true', projectId]
+                amount_raised = $8, creator_work = $9, status = $10
+            WHERE id = $11`,
+            [
+                parseInt(category_id) || 1, title, description, finalImageList, finalFileList, 
+                parseFloat(latitude) || null, parseFloat(longitude) || null, parseFloat(contributionAmount) || 0, 
+                ownTaxes === 'true', status || 'Proposed', projectId
+            ]
         );
 
-        res.json({ message: 'Project updated successfully' });
+        res.status(201).json({ message: 'Project created successfully', projectId });
     } catch (error) {
-        console.error("Update failed:", error);
-        res.status(500).json({ error: "Failed to update project" });
+        console.error("🔥 CRITICAL DB ERROR:", error);
+        res.status(500).json({ error: 'Failed to create project' });
     }
 });
 
@@ -174,7 +180,6 @@ router.delete('/:id', verifyToken, async (req, res) => {
         if (projectRes.rows.length === 0) return res.status(404).json({ error: "Project not found or you don't have permission" });
         const project = projectRes.rows[0];
 
-        // Delete all files from S3 to prevent orphans
         if (project.image_list) {
             for (const imgKey of project.image_list) await deleteFromS3(imgKey, 'cleartax-image-uploads');
         }
@@ -182,13 +187,32 @@ router.delete('/:id', verifyToken, async (req, res) => {
             for (const fileKey of project.file_list) await deleteFromS3(fileKey, 'cleartax-file-uploads');
         }
 
-        // Delete from Database
         await pool.query('DELETE FROM open_problems WHERE id = $1', [projectId]);
-
         res.json({ success: true, message: "Project and files deleted successfully" });
     } catch (error) {
-        console.error("Delete failed:", error);
         res.status(500).json({ error: "Failed to delete project" });
+    }
+});
+
+// GET STATUSES ROUTE
+router.get('/statuses', async (req, res) => {
+    try {
+        const statusesRes = await pool.query('SELECT name, color FROM project_statuses ORDER BY id ASC');
+        // Return the full array of objects { name, color } instead of just strings
+        res.json({ statuses: statusesRes.rows });
+    } catch (error) {
+        console.error("Failed to fetch statuses", error);
+        res.status(500).json({ error: 'Failed to fetch statuses' });
+    }
+});
+
+router.get('/community', async (req, res) => {
+    try {
+        const projects = await pool.query('SELECT * FROM open_problems ORDER BY created_at DESC');
+        res.json({ projects: projects.rows });
+    } catch (error) {
+        console.error("Failed to fetch community projects", error);
+        res.status(500).json({ error: 'Failed to fetch community projects' });
     }
 });
 

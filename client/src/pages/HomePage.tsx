@@ -24,11 +24,18 @@ function HomePage() {
       })
       .catch(err => console.error("Error fetching pie chart data:", err));
 
-    axios.get('/api/landingPage/openProblems')
-      .then(res => {
-        setOpenProblems(res.data);
-      })
-      .catch(err => console.error("Error fetching open problems:", err));
+    const fetchOpenProblems = () => {
+      axios.get('/api/landingPage/openProblems')
+        .then(res => {
+          setOpenProblems(res.data);
+        })
+        .catch(err => console.error("Error fetching open problems:", err));
+    };
+
+    fetchOpenProblems();
+    const intervalId = setInterval(fetchOpenProblems, 10000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
