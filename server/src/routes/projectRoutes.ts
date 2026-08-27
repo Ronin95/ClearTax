@@ -74,7 +74,7 @@ router.post('/', verifyToken, upload.fields([{ name: 'images', maxCount: 10 }, {
         const userId = (req as any).user?.id;
         if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-                const { title, category_id, description, latitude, longitude, contributionAmount, ownTaxes, status } = req.body;
+        const { title, category_id, description, latitude, longitude, contributionAmount, targetFunding, ownTaxes, status } = req.body;
         const files = req.files as { [fieldname: string]: Express.Multer.File[] };
         
         const imageList: string[] = [];
@@ -90,8 +90,8 @@ router.post('/', verifyToken, upload.fields([{ name: 'images', maxCount: 10 }, {
         const projectId = crypto.randomUUID();
         await pool.query(
             `INSERT INTO open_problems 
-            (id, user_id, category_id, project_name, summar_desc, image_list, file_list, latitude, longitude, amount_raised, creator_work, status) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            (id, user_id, category_id, project_name, summar_desc, image_list, file_list, latitude, longitude, amount_raised, target_funding, creator_work, status) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
             [
                 projectId, 
                 userId, 
@@ -103,6 +103,7 @@ router.post('/', verifyToken, upload.fields([{ name: 'images', maxCount: 10 }, {
                 latitude ? parseFloat(latitude) : null, 
                 longitude ? parseFloat(longitude) : null, 
                 parseFloat(contributionAmount) || 0, 
+                parseFloat(targetFunding) || 0, 
                 ownTaxes === 'true', 
                 status || 'Proposed'
             ]
@@ -125,7 +126,7 @@ router.put('/:id', verifyToken, upload.fields([{ name: 'images', maxCount: 10 },
         if (projectRes.rows.length === 0) return res.status(404).json({ error: "Project not found" });
         const oldProject = projectRes.rows[0];
 
-        const { title, category_id, description, latitude, longitude, contributionAmount, ownTaxes, status } = req.body;
+        const { title, category_id, description, latitude, longitude, contributionAmount, targetFunding, ownTaxes, status } = req.body;
         
         const keptImages = req.body.existingImages ? JSON.parse(req.body.existingImages) : [];
         const keptFiles = req.body.existingFiles ? JSON.parse(req.body.existingFiles) : [];
@@ -154,11 +155,12 @@ router.put('/:id', verifyToken, upload.fields([{ name: 'images', maxCount: 10 },
             `UPDATE open_problems SET 
                 category_id = $1, project_name = $2, summar_desc = $3, 
                 image_list = $4, file_list = $5, latitude = $6, longitude = $7, 
-                amount_raised = $8, creator_work = $9, status = $10
-            WHERE id = $11`,
+                amount_raised = $8, target_funding = $9, creator_work = $10, status = $11
+            WHERE id = $12`,
             [
                 parseInt(category_id) || 1, title, description, finalImageList, finalFileList, 
-                parseFloat(latitude) || null, parseFloat(longitude) || null, parseFloat(contributionAmount) || 0, 
+                parseFloat(latitude) || null, parseFloat(longitude) || null, 
+                parseFloat(contributionAmount) || 0, parseFloat(targetFunding) || 0,
                 ownTaxes === 'true', status || 'Proposed', projectId
             ]
         );
@@ -198,7 +200,6 @@ router.delete('/:id', verifyToken, async (req, res) => {
 router.get('/statuses', async (req, res) => {
     try {
         const statusesRes = await pool.query('SELECT name, color FROM project_statuses ORDER BY id ASC');
-        // Return the full array of objects { name, color } instead of just strings
         res.json({ statuses: statusesRes.rows });
     } catch (error) {
         console.error("Failed to fetch statuses", error);
@@ -206,6 +207,7 @@ router.get('/statuses', async (req, res) => {
     }
 });
 
+// GET COMMUNITY PROJECTS
 router.get('/community', verifyToken, async (req, res) => {
     try {
         const userId = (req as any).user?.id;
@@ -223,32 +225,82 @@ router.get('/community', verifyToken, async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch community projects' });
     }
 });
-router.post('/:id/approve', verifyToken, async (req, res) => {
+
+// POST FUNDING ROUTE
+router.post('/:id/approve', verifyToken, upload.array('files'), async (req, res) => {
     try {
         const projectId = req.params.id;
         const userId = (req as any).user?.id;
+        
         if (!userId) return res.status(401).json({ error: "Unauthorized" });
-        
-        // 1. Insert approval (ON CONFLICT DO NOTHING prevents duplicate votes at the database level)
-        await pool.query(`
-            INSERT INTO project_approvals (project_id, user_id)
-            VALUES ($1, $2)
-            ON CONFLICT DO NOTHING
-        `, [projectId, userId]);
-        
-        // 2. Count total approvals for this project
-        const countRes = await pool.query(`SELECT COUNT(*) FROM project_approvals WHERE project_id = $1`, [projectId]);
-        const count = parseInt(countRes.rows[0].count, 10);
-        
-        // 3. If it reaches 3, upgrade the status automatically!
-        if (count >= 3) {
-            await pool.query(`UPDATE open_problems SET status = 'In Progress' WHERE id = $1 AND status = 'Proposed'`, [projectId]);
+
+        const { comment, fundedAmount } = req.body;
+        const fundAmount = parseFloat(fundedAmount || '0');
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // 1. Check User's Available Money
+            const userRes = await client.query('SELECT available_amount FROM users WHERE id = $1', [userId]);
+            const userMoney = parseFloat(userRes.rows[0]?.available_amount || '0');
+
+            if (fundAmount > 0 && userMoney < fundAmount) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: "Not enough money available. Please extract your money from the RIS." });
+            }
+
+            // 2. Process File Uploads to Garage S3
+            const files = req.files as Express.Multer.File[];
+            const uploadedFileNames: string[] = [];
+            
+            if (files && files.length > 0) {
+                for (const file of files) {
+                    const uniqueFileName = await uploadToS3(file, 'cleartax-file-uploads');
+                    uploadedFileNames.push(uniqueFileName);
+                }
+            }
+
+            // 3. Move the Money
+            if (fundAmount > 0) {
+                await client.query('UPDATE users SET available_amount = available_amount - $1, contributed_amount = contributed_amount + $1 WHERE id = $2', [fundAmount, userId]);
+                await client.query('UPDATE open_problems SET amount_raised = amount_raised + $1 WHERE id = $2', [fundAmount, projectId]);
+            }
+
+            // 4. Save the Approval / Funding Record
+            await client.query(`
+                INSERT INTO project_approvals (project_id, user_id, comment, file_list, funded_amount)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [projectId, userId, comment, uploadedFileNames, fundAmount]);
+
+            // 5. Check if Funding Goal is Met!
+            const projRes = await client.query('SELECT amount_raised, target_funding FROM open_problems WHERE id = $1', [projectId]);
+            const currentRaised = parseFloat(projRes.rows[0].amount_raised);
+            const targetGoal = parseFloat(projRes.rows[0].target_funding);
+
+            // If it met or exceeded the goal, approve it!
+            if (currentRaised >= targetGoal) {
+                await client.query(`UPDATE open_problems SET status = 'Approved' WHERE id = $1 AND status = 'Proposed'`, [projectId]);
+            }
+
+            await client.query('COMMIT'); // Commit Transaction!
+            res.status(200).json({ message: "Successfully funded project!" });
+        } catch (err: any) {
+            await client.query('ROLLBACK');
+            
+            // Handle constraint errors (like trying to fund twice)
+            if (err.code === '23505') {
+                return res.status(400).json({ error: "You have already backed this project." });
+            }
+            
+            console.error("Transaction Error:", err);
+            res.status(500).json({ error: "Server Error during funding" });
+        } finally {
+            client.release();
         }
-        
-        res.json({ success: true, count });
     } catch (error) {
-        console.error("Approval failed", error);
-        res.status(500).json({ error: "Failed to approve project" });
+        console.error("Funding failed", error);
+        res.status(500).json({ error: "Failed to fund project" });
     }
 });
 
@@ -300,7 +352,7 @@ router.post('/:id/complete', verifyToken, upload.fields([{ name: 'finalImages', 
         );
 
         // 2. Change the project status to Completed
-        await pool.query("UPDATE open_problems SET status = 'Completed' WHERE id = $1", [projectId]);
+        await pool.query("UPDATE open_problems SET status = 'Pending Completion' WHERE id = $1", [projectId]);
 
         res.status(200).json({ message: 'Project completed successfully' });
     } catch (error) {
@@ -324,6 +376,110 @@ router.get('/:id/completion', verifyToken, async (req, res) => {
         console.error("Failed to fetch completion report", error);
         res.status(500).json({ error: "Server error" });
     }
+});
+
+// GET: Tender Board (Approved projects looking for a company)
+router.get('/tender-board', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM open_problems WHERE status = 'Approved' AND assigned_company_id IS NULL ORDER BY created_at DESC");
+        res.json({ projects: result.rows });
+    } catch (err) { res.status(500).json({ error: 'Server error fetching tender board' }); }
+});
+
+// POST: Submit a Bid (Company Action)
+router.post('/:id/bids', verifyToken, async (req, res) => {
+    try {
+        const { estimatedCost, pitch, startDate, endDate } = req.body;
+        const companyId = (req as any).user.id;
+        const projectId = req.params.id;
+        
+        await pool.query(
+            "INSERT INTO project_bids (project_id, company_id, estimated_cost, pitch, estimated_start_date, estimated_end_date) VALUES ($1, $2, $3, $4, $5, $6)",
+            [projectId, companyId, estimatedCost, pitch, startDate || null, endDate || null]
+        );
+        res.json({ message: "Bid submitted successfully" });
+    } catch (err) { res.status(500).json({ error: 'Server error submitting bid' }); }
+});
+
+// GET: View all Bids for a Project (Creator Action)
+router.get('/:id/bids', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT b.*, u.username as company_name, u.email as company_email 
+            FROM project_bids b 
+            JOIN users u ON b.company_id = u.id 
+            WHERE b.project_id = $1 ORDER BY b.created_at DESC
+        `, [req.params.id]);
+        res.json({ bids: result.rows });
+    } catch (err) { res.status(500).json({ error: 'Server error fetching bids' }); }
+});
+
+// POST: Accept a Bid (Creator Action)
+router.post('/:id/accept-bid', verifyToken, async (req, res) => {
+    try {
+        const { bidId } = req.body;
+        const projectId = req.params.id;
+        
+        const bidRes = await pool.query("SELECT company_id FROM project_bids WHERE id = $1", [bidId]);
+        if(bidRes.rows.length === 0) return res.status(404).json({error: "Bid not found"});
+        
+        const companyId = bidRes.rows[0].company_id;
+
+        // Accept this bid, reject all others
+        await pool.query("UPDATE project_bids SET status = 'Accepted' WHERE id = $1", [bidId]);
+        await pool.query("UPDATE project_bids SET status = 'Rejected' WHERE project_id = $1 AND id != $2", [projectId, bidId]);
+        
+        // Assign company and move project to In Progress
+        await pool.query("UPDATE open_problems SET assigned_company_id = $1, status = 'In Progress' WHERE id = $2", [companyId, projectId]);
+        
+        res.json({ message: "Bid accepted. Project is now In Progress!" });
+    } catch (err) { res.status(500).json({ error: 'Server error accepting bid' }); }
+});
+
+// POST: Submit Progress Update (Company Action)
+router.post('/:id/updates', verifyToken, upload.single('image'), async (req, res) => {
+    try {
+        const { message } = req.body;
+        const companyId = (req as any).user.id;
+        const projectId = req.params.id;
+        
+        let imageUrl = null;
+        if (req.file) {
+            imageUrl = await uploadToS3(req.file, 'cleartax-image-uploads');
+        }
+        
+        await pool.query("INSERT INTO project_updates (project_id, company_id, message, image_url) VALUES ($1, $2, $3, $4)", [projectId, companyId, message, imageUrl]);
+        res.json({ message: "Progress update posted" });
+    } catch (err) { res.status(500).json({ error: 'Server error posting update' }); }
+});
+
+// GET: View Progress Updates (Public Action)
+router.get('/:id/updates', verifyToken, async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM project_updates WHERE project_id = $1 ORDER BY created_at DESC", [req.params.id]);
+        res.json({ updates: result.rows });
+    } catch (err) { res.status(500).json({ error: 'Server error fetching updates' }); }
+});
+
+// POST: Verify Completion Sign-off (User Action)
+router.post('/:id/verify-completion', verifyToken, async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        const userId = (req as any).user.id;
+        
+        // Record the sign-off
+        await pool.query("INSERT INTO project_completion_approvals (project_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [projectId, userId]);
+        
+        // Check if we hit the required amount of sign-offs (e.g. 3 users)
+        const countRes = await pool.query("SELECT COUNT(*) FROM project_completion_approvals WHERE project_id = $1", [projectId]);
+        
+        if (parseInt(countRes.rows[0].count) >= 3) {
+            // Once verified by the community, officially complete it!
+            await pool.query("UPDATE open_problems SET status = 'Completed' WHERE id = $1", [projectId]);
+        }
+        
+        res.json({ message: "Completion report verified by user" });
+    } catch (err) { res.status(500).json({ error: 'Server error verifying completion' }); }
 });
 
 export default router;

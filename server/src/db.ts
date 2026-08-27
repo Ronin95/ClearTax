@@ -20,6 +20,7 @@ export async function initDB() {
             { name: 'Proposed', color: 'default' },
             { name: 'Approved', color: 'info' },
             { name: 'In Progress', color: 'warning' },
+            { name: 'Pending Completion', color: 'secondary' },
             { name: 'Completed', color: 'success' }
         ];
         for (const status of defaultStatuses) {
@@ -112,6 +113,7 @@ export async function initDB() {
         `);
         
         // Open Problems Table
+                // Open Problems Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS open_problems (
                 id UUID PRIMARY KEY,
@@ -124,9 +126,46 @@ export async function initDB() {
                 latitude DECIMAL(10, 6),
                 longitude DECIMAL(10, 6),
                 amount_raised DECIMAL(12, 2) DEFAULT 0.00,
+                target_funding DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
                 creator_work BOOLEAN DEFAULT false,
                 status VARCHAR(50) REFERENCES project_statuses(name),
+                assigned_company_id UUID REFERENCES users(id),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS project_bids (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                project_id UUID REFERENCES open_problems(id) ON DELETE CASCADE,
+                company_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                estimated_cost DECIMAL(12, 2) NOT NULL,
+                estimated_start_date DATE,
+                estimated_end_date DATE,
+                pitch TEXT NOT NULL,
+                file_list TEXT[] DEFAULT '{}',
+                status VARCHAR(50) DEFAULT 'Pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS project_updates (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                project_id UUID REFERENCES open_problems(id) ON DELETE CASCADE,
+                company_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                message TEXT NOT NULL,
+                image_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS project_completion_approvals (
+                project_id UUID REFERENCES open_problems(id) ON DELETE CASCADE,
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (project_id, user_id)
             );
         `);
 
@@ -134,6 +173,9 @@ export async function initDB() {
             CREATE TABLE IF NOT EXISTS project_approvals (
                 project_id UUID REFERENCES open_problems(id) ON DELETE CASCADE,
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                comment TEXT,
+                file_list TEXT[] DEFAULT '{}',
+                funded_amount DECIMAL(12, 2) DEFAULT 0.00,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (project_id, user_id)
             );

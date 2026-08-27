@@ -19,6 +19,8 @@ import ProjectList from '../components/dashboard/ProjectList';
 import ProjectFilterBar from '../components/dashboard/ProjectFilterBar';
 import ProjectCompletionModal from '../components/dashboard/ProjectCompletionModal';
 import dayjs from 'dayjs';
+import UpdatesListModal from '../components/dashboard/UpdatesListModal';
+import BidsListModal from '../components/dashboard/BidsListModal';
 
 export default function RegularDashboard() {
     const [openCompletionModal, setOpenCompletionModal] = useState(false);
@@ -62,6 +64,10 @@ export default function RegularDashboard() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
+    const [activeActionId, setActiveActionId] = useState<string | null>(null);
+    const [openBidsModal, setOpenBidsModal] = useState(false);
+    const [openUpdatesModal, setOpenUpdatesModal] = useState(false);
+
     useEffect(() => {
         setMyProjectsPage(1);
         setCommunityProjectsPage(1);
@@ -95,7 +101,9 @@ export default function RegularDashboard() {
             images: p.image_list || p.images || [],                     
             files: p.file_list || p.files || [],                        
             address: (p.latitude && p.longitude) ? `${p.latitude}, ${p.longitude}` : '', 
-            contributionAmount: p.amount_raised || p.contributionAmount || 0, 
+            contributionAmount: p.contributionAmount || 0, 
+            amount_raised: p.amount_raised || 0,
+            target_funding: p.target_funding || 0,
             ownTaxes: p.creator_work === true,                          
             status: p.status || 'Proposed',
             created_at: p.created_at,
@@ -273,7 +281,6 @@ export default function RegularDashboard() {
         }
     };
 
-    // --- NEW APPROVE HANDLER ---
     const handleApproveProject = async (id: string) => {
         try {
             await axios.post(`http://localhost:3001/api/projects/${id}/approve`, {}, { withCredentials: true });
@@ -311,7 +318,7 @@ export default function RegularDashboard() {
         });
     };
 
-        const handleOpenComplete = (id: string) => {
+    const handleOpenComplete = (id: string) => {
         setCompletingProjectId(id);
         setCompletionData({ summary: '', finalCost: '', completionDate: null, maintenanceNotes: '', rating: 0, finalImages: [], finalFiles: [] });
         setOpenCompletionModal(true);
@@ -355,7 +362,7 @@ export default function RegularDashboard() {
     const communityTotalPages = Math.ceil(filteredCommunityProjects.length / PROJECTS_PER_PAGE);
     const displayedCommunityProjects = filteredCommunityProjects.slice((communityProjectsPage - 1) * PROJECTS_PER_PAGE, communityProjectsPage * PROJECTS_PER_PAGE);
 
-        const handleOpenCompletionModal = async (id: string, readOnly: boolean) => {
+    const handleOpenCompletionModal = async (id: string, readOnly: boolean) => {
         try {
             const res = await axios.get(`http://localhost:3001/api/projects/${id}/completion`, { withCredentials: true });
             const data = res.data.completion;
@@ -375,6 +382,27 @@ export default function RegularDashboard() {
             console.error("Failed to fetch completion data", err);
             alert("Failed to load the completion report. It might not exist.");
         }
+    };
+
+    const handleViewBids = (id: string) => { setActiveActionId(id); setOpenBidsModal(true); };
+    const handleViewUpdates = (id: string) => { setActiveActionId(id); setOpenUpdatesModal(true); };
+    
+    const handleAcceptBid = async (bidId: string) => {
+        if (!activeActionId) return;
+        try {
+            await axios.post(`http://localhost:3001/api/projects/${activeActionId}/accept-bid`, { bidId }, { withCredentials: true });
+            alert("Bid accepted! The project is now In Progress.");
+            setOpenBidsModal(false);
+            fetchProjects(); // Refresh dashboard
+        } catch (err) { alert("Failed to accept bid"); }
+    };
+
+    const handleVerifyCompletion = async (id: string) => {
+        try {
+            await axios.post(`http://localhost:3001/api/projects/${id}/verify-completion`, {}, { withCredentials: true });
+            alert("You have officially signed off on the completion report! If enough users sign off, it will be fully Completed.");
+            fetchProjects(); // Refresh dashboard
+        } catch (err) { alert("Failed to verify"); }
     };
 
     return (
@@ -443,7 +471,10 @@ export default function RegularDashboard() {
                         onViewCompletion={(id) => handleOpenCompletionModal(id, true)}
                         onEditCompletion={(id) => handleOpenCompletionModal(id, false)}
                         getStatusColor={getStatusColor} 
-                        formatDate={formatDate} 
+                        formatDate={formatDate}
+                        onViewBids={handleViewBids}
+                        onViewUpdates={handleViewUpdates}
+                        onVerifyCompletion={handleVerifyCompletion}
                     />
                     {myTotalPages > 1 && (
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -499,6 +530,9 @@ export default function RegularDashboard() {
                 onSubmit={handleCompleteProjectSubmit}
                 readOnly={isModalReadOnly}
             />
+
+            <BidsListModal open={openBidsModal} onClose={() => setOpenBidsModal(false)} projectId={activeActionId} onAcceptBid={handleAcceptBid} />
+            <UpdatesListModal open={openUpdatesModal} onClose={() => setOpenUpdatesModal(false)} projectId={activeActionId} />
         </Container>
     );
 }

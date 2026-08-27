@@ -15,4 +15,7 @@ docker exec -it cleartax_nodejs node --experimental-strip-types src/seedUsersCom
 echo -e '\nRunning seedProblems.ts...'
 docker exec -it cleartax_nodejs node --experimental-strip-types src/seedProblems.ts
 
-echo -e '\nAll seed scripts finished!'
+echo -e '\nRunning seedLifecycle.ts...'
+docker exec -it cleartax_nodejs node --experimental-strip-types src/seedLifecycle.ts
+
+echo -e '\nAll seed scripts finished! Your app is fully populated!'

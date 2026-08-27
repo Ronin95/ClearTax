@@ -8,6 +8,7 @@ export interface User {
     available_amount: string;
     contributed_amount: string;
     role_id: number;
+    company_name?: string;
 }
 
 export interface ProjectData {
@@ -24,6 +25,8 @@ export interface ProjectData {
     created_at?: string;
     approvalCount?: number;
     hasApproved?: boolean;
+    amount_raised?: number;
+    target_funding?: number;
 }
 
 export interface StatusOption {
@@ -56,10 +59,15 @@ export interface ProjectListProps {
     onDelete?: (id: string) => void;
     onApprove?: (id: string) => void;
     onComplete?: (id: string) => void;
-    onViewCompletion?: (id: string) => void;
-    onEditCompletion?: (id: string) => void;
+    onViewCompletion?: (id: string) => void; 
+    onEditCompletion?: (id: string) => void; 
+    onBid?: (id: string) => void;
+    onUpdate?: (id: string) => void;
     getStatusColor: (status: string) => any;
     formatDate: (date?: string) => string;
+    onViewBids?: (id: string) => void;
+    onViewUpdates?: (id: string) => void;
+    onVerifyCompletion?: (id: string) => void;
 }
 
 export interface SolidarityModalProps {

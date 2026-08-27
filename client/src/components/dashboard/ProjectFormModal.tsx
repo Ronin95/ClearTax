@@ -129,7 +129,7 @@ export default function ProjectFormModal({
                     </Box>
 
                     <FormGroup>
-                        <FormControlLabel control={<Switch checked={projectData.ownTaxes} onChange={(e) => setProjectData({ ...projectData, ownTaxes: e.target.checked })} />} label="Will I work / contribute to this project with my own taxes?" />
+                        <FormControlLabel control={<Switch checked={projectData.ownTaxes} onChange={(e) => setProjectData({ ...projectData, ownTaxes: e.target.checked })} />} label="Will I contribute to this project with my own taxes?" />
                     </FormGroup>
 
                 </Stack>

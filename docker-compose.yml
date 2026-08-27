@@ -23,9 +23,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
       - JWT_SECRET=${JWT_SECRET}
-      - S3_ENDPOINT=http://garage:3900
-      - S3_REGION=garage
-      # These will be configured via the Garage CLI once it is running
+      - S3_ENDPOINT=${GARAGE_ENDPOINT}
+      - S3_REGION=${GARAGE_REGION}
       - AWS_ACCESS_KEY_ID=${GARAGE_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${GARAGE_SECRET_KEY}
 
@@ -53,7 +52,7 @@ services:
     image: postgres:16-alpine
     container_name: cleartax_postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -71,7 +70,7 @@ services:
     image: dpage/pgadmin4
     container_name: cleartax_pgadmin
     ports:
-      - "5050:80"
+      - "5055:80"
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
@@ -86,9 +85,9 @@ services:
     container_name: cleartax_garage
     restart: always
     ports:
-      - "3900:3900" # S3 API
-      - "3901:3901" # RPC communication
-      - "3902:3902" # S3 Web
+      - "3910:3900" # S3 API
+      - "3911:3901" # RPC communication
+      - "3912:3902" # S3 Web
     volumes:
       - ./garage.toml:/etc/garage.toml
       - garage_meta:/var/lib/garage/meta

@@ -1,7 +1,7 @@
 import { initDB, pool } from './db.ts';
 import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
-import { hashPassword } from './utils/authUtils.ts'; // <-- Use YOUR app's hasher!
+import { hashPassword } from './utils/authUtils.ts';
 
 async function seedUsers() {
     try {
@@ -11,10 +11,10 @@ async function seedUsers() {
         for (let i = 1; i <= 800; i++) {
             const id = crypto.randomUUID();
             const username = faker.internet.username();
-            const email = faker.internet.email().toLowerCase(); // <-- Forces lowercase!
+            const email = faker.internet.email().toLowerCase();
             
             const plainTextPassword = 'password123';
-            const hashedPassword = await hashPassword(plainTextPassword); // <-- PERFECT HASH!
+            const hashedPassword = await hashPassword(plainTextPassword);
             
             const taxNumber = faker.string.numeric(9);
             const contributedAmount = faker.number.float({ min: 100, max: 2000, fractionDigits: 2 });
