@@ -62,7 +62,9 @@ export default function ProjectApprovalModal({ open, onClose, project, onApprove
                         type="number" fullWidth 
                         value={fundedAmount} 
                         onChange={e => setFundedAmount(Number(e.target.value))}
-                        inputProps={{ min: 0 }}
+                        slotProps={{
+                            htmlInput: { min: 0 }
+                        }}
                     />
 
                     <Box>

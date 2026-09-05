@@ -1,10 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Container, Typography, Card, CardContent, Box, Tabs, Tab, CircularProgress } from "@mui/material";
-import EuroIcon from '@mui/icons-material/Euro';
-import BuildIcon from '@mui/icons-material/Build';
-import PendingActionsIcon from '@mui/icons-material/PendingActions';
+import { useEffect, useState } from 'react';
+import { Container, Typography, Box, Tabs, Tab, CircularProgress, TextField, InputAdornment } from "@mui/material";
+import SearchIcon from '@mui/icons-material/Search';
 import axios from 'axios';
-import dayjs from 'dayjs';
 
 import { User, ProjectData, CompletionData } from '../types/dashboardTypes';
 import CustomTabPanel, { a11yProps } from '../components/common/CustomTabPanel';
@@ -12,22 +9,27 @@ import ProjectList from '../components/dashboard/ProjectList';
 import BidModal from '../components/dashboard/BidModal';
 import UpdateModal from '../components/dashboard/UpdateModal';
 import ProjectCompletionModal from '../components/dashboard/ProjectCompletionModal';
+import CompanyStatsCards from '../components/dashboard/CompanyStatsCards';
 
 export default function CompanyDashboard() {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [tabValue, setTabValue] = useState(0);
+    const [searchQuery, setSearchQuery] = useState('');
 
+    // The arrays containing all projects for each tab
     const [tenderProjects, setTenderProjects] = useState<ProjectData[]>([]);
     const [activeProjects, setActiveProjects] = useState<ProjectData[]>([]);
     const [portfolioProjects, setPortfolioProjects] = useState<ProjectData[]>([]);
+
+    // The currently selected project for the Modals
+    const [activeProject, setActiveProject] = useState<ProjectData | null>(null);
 
     // Modals state
     const [openBidModal, setOpenBidModal] = useState(false);
     const [openUpdateModal, setOpenUpdateModal] = useState(false);
     const [openCompletionModal, setOpenCompletionModal] = useState(false);
     
-    const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
     const [completionData, setCompletionData] = useState<CompletionData>({
         summary: '', finalCost: '', completionDate: null, maintenanceNotes: '', rating: 0, finalImages: [], finalFiles: []
     });
@@ -42,10 +44,24 @@ export default function CompanyDashboard() {
             files: p.file_list || p.files || [],                        
             address: (p.latitude && p.longitude) ? `${p.latitude}, ${p.longitude}` : '', 
             contributionAmount: p.amount_raised || p.contributionAmount || 0, 
+            amount_raised: p.amount_raised || 0,
+            target_funding: p.target_funding || 0,
             ownTaxes: p.creator_work === true,                          
             status: p.status || 'Proposed',
             created_at: p.created_at,
         }));
+    };
+
+    const formatDate = (dateString?: string) => {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Invalid Date';
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        const hh = String(date.getHours()).padStart(2, '0');
+        const min = String(date.getMinutes()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
     };
 
     const fetchDashboardData = async () => {
@@ -53,20 +69,14 @@ export default function CompanyDashboard() {
             const userRes = await axios.get('http://localhost:3001/api/users/me', { withCredentials: true });
             setUser(userRes.data.user);
 
-            // Fetch Tender Board (Approved projects looking for a company)
             const tenderRes = await axios.get('http://localhost:3001/api/projects/tender-board', { withCredentials: true });
             setTenderProjects(formatProjects(tenderRes.data.projects));
 
-            // Fetch My Projects (In Progress or Completed)
             const myRes = await axios.get('http://localhost:3001/api/projects', { withCredentials: true });
             const allMyProjects = formatProjects(myRes.data.projects);
             
-            // Note: The GET /api/projects route fetches where user_id = me. 
-            // Wait, if the company didn't *create* the project, it won't show up there!
-            // For now, let's just assume we will fetch them (we will fix the backend GET for companies later if needed)
             setActiveProjects(allMyProjects.filter(p => p.status === 'In Progress' || p.status === 'Pending Completion'));
             setPortfolioProjects(allMyProjects.filter(p => p.status === 'Completed'));
-
         } catch (err) {
             console.error("Failed to load dashboard", err);
         } finally {
@@ -77,11 +87,25 @@ export default function CompanyDashboard() {
     useEffect(() => { fetchDashboardData(); }, []);
 
     // Action Handlers
-    const handleBid = (id: string) => { setActiveProjectId(id); setOpenBidModal(true); };
-    const handleUpdate = (id: string) => { setActiveProjectId(id); setOpenUpdateModal(true); };
+    const handleBid = (id: string) => { 
+        const proj = tenderProjects.find(p => p.id === id) || activeProjects.find(p => p.id === id);
+        setActiveProject(proj || null); 
+        setOpenBidModal(true); 
+    };
+
+    const handleUpdate = (id: string) => { 
+        setActiveProject(activeProjects.find(p => p.id === id) || null); 
+        setOpenUpdateModal(true); 
+    };
+
+    const handleComplete = (id: string) => {
+        setActiveProject(activeProjects.find(p => p.id === id) || null);
+        setCompletionData({ summary: '', finalCost: '', completionDate: null, maintenanceNotes: '', rating: 0, finalImages: [], finalFiles: [] });
+        setOpenCompletionModal(true);
+    };
     
     const handleBidSubmit = async (data: any) => {
-        if (!activeProjectId) return;
+        if (!activeProject?.id) return;
         const formData = new FormData();
         formData.append('estimatedCost', data.estimatedCost);
         formData.append('pitch', data.pitch);
@@ -90,7 +114,7 @@ export default function CompanyDashboard() {
         if (data.files) data.files.forEach((file: File) => formData.append('files', file));
 
         try {
-            await axios.post(`http://localhost:3001/api/projects/${activeProjectId}/bids`, formData, { 
+            await axios.post(`http://localhost:3001/api/projects/${activeProject.id}/bids`, formData, { 
                 headers: { 'Content-Type': 'multipart/form-data' },
                 withCredentials: true 
             });
@@ -100,12 +124,12 @@ export default function CompanyDashboard() {
     };
 
     const handleUpdateSubmit = async (data: any) => {
-        if (!activeProjectId) return;
+        if (!activeProject?.id) return;
         const formData = new FormData();
         formData.append('message', data.message);
         if (data.image) formData.append('image', data.image);
         try {
-            await axios.post(`http://localhost:3001/api/projects/${activeProjectId}/updates`, formData, { 
+            await axios.post(`http://localhost:3001/api/projects/${activeProject.id}/updates`, formData, { 
                 headers: { 'Content-Type': 'multipart/form-data' }, withCredentials: true 
             });
             alert("Update posted to the community!");
@@ -113,14 +137,8 @@ export default function CompanyDashboard() {
         } catch (err) { alert("Failed to post update."); }
     };
 
-    const handleComplete = (id: string) => {
-        setActiveProjectId(id);
-        setCompletionData({ summary: '', finalCost: '', completionDate: null, maintenanceNotes: '', rating: 0, finalImages: [], finalFiles: [] });
-        setOpenCompletionModal(true);
-    };
-
     const handleCompleteProjectSubmit = async () => {
-        if (!activeProjectId) return;
+        if (!activeProject?.id) return;
         const formData = new FormData();
         formData.append('summary', completionData.summary);
         formData.append('finalCost', completionData.finalCost);
@@ -131,7 +149,7 @@ export default function CompanyDashboard() {
         completionData.finalFiles.forEach(file => formData.append('finalFiles', file));
 
         try {
-            await axios.post(`http://localhost:3001/api/projects/${activeProjectId}/complete`, formData, { 
+            await axios.post(`http://localhost:3001/api/projects/${activeProject.id}/complete`, formData, { 
                 headers: { 'Content-Type': 'multipart/form-data' }, withCredentials: true 
             });
             alert("Completion Report sent! Awaiting community verification.");
@@ -142,6 +160,17 @@ export default function CompanyDashboard() {
 
     if (loading) return <Container sx={{ py: 8, textAlign: 'center' }}><CircularProgress /></Container>;
 
+    const getFilteredProjects = (projects: ProjectData[]) => {
+        return projects.filter(p => {
+            const searchLower = searchQuery.toLowerCase();
+            return p.title.toLowerCase().includes(searchLower) || p.description.toLowerCase().includes(searchLower);
+        });
+    };
+
+    const displayedTender = getFilteredProjects(tenderProjects);
+    const displayedActive = getFilteredProjects(activeProjects);
+    const displayedPortfolio = getFilteredProjects(portfolioProjects);
+
     return (
         <Container sx={{ py: 8 }}>
             <Box sx={{ mb: 4 }}>
@@ -149,46 +178,50 @@ export default function CompanyDashboard() {
                 <Typography color="text.secondary">Welcome, {user?.company_name || user?.username}. Browse tenders and manage active contracts.</Typography>
             </Box>
 
-            <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
-                <Card sx={{ bgcolor: '#2e7d32', color: 'white' }}>
-                    <CardContent sx={{ textAlign: 'center' }}>
-                        <EuroIcon sx={{ fontSize: 40 }} />
-                        <Typography variant="h6">Total Revenue</Typography>
-                        <Typography variant="h4">€ {portfolioProjects.reduce((sum, p) => sum + Number(p.contributionAmount), 0).toLocaleString('de-AT')}</Typography>
-                    </CardContent>
-                </Card>
-                <Card variant="outlined">
-                    <CardContent sx={{ textAlign: 'center' }}>
-                        <BuildIcon color="primary" sx={{ fontSize: 40 }} />
-                        <Typography variant="h6">Active Pipeline</Typography>
-                        <Typography variant="h4">€ {activeProjects.reduce((sum, p) => sum + Number(p.contributionAmount), 0).toLocaleString('de-AT')}</Typography>
-                    </CardContent>
-                </Card>
-            </section>
+            <CompanyStatsCards portfolioProjects={portfolioProjects} activeProjects={activeProjects} />
 
             <section style={{ marginTop: '40px' }}>
                 <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
                     <Tabs value={tabValue} onChange={(e, val) => setTabValue(val)}>
-                        <Tab label={`Tender Board (${tenderProjects.length})`} {...a11yProps(0)} />
-                        <Tab label={`Active Contracts (${activeProjects.length})`} {...a11yProps(1)} />
-                        <Tab label={`Completed Portfolio (${portfolioProjects.length})`} {...a11yProps(2)} />
+                        <Tab label={`Tender Board (${displayedTender.length})`} {...a11yProps(0)} />
+                        <Tab label={`Active Contracts (${displayedActive.length})`} {...a11yProps(1)} />
+                        <Tab label={`Completed Portfolio (${displayedPortfolio.length})`} {...a11yProps(2)} />
                     </Tabs>
                 </Box>
                 
+                <Box sx={{ mb: 3 }}>
+                    <TextField 
+                        fullWidth 
+                        variant="outlined" 
+                        placeholder="Search projects by title or description..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        slotProps={{
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon />
+                                    </InputAdornment>
+                                ),
+                            }
+                        }}
+                    />
+                </Box>
+
                 <CustomTabPanel value={tabValue} index={0}>
-                    <ProjectList projects={tenderProjects} showActions={false} onBid={handleBid} getStatusColor={() => 'info'} formatDate={(d) => d ? new Date(d).toLocaleDateString() : ''} />
+                    <ProjectList projects={displayedTender} showActions={false} onBid={handleBid} getStatusColor={() => 'info'} formatDate={formatDate} />
                 </CustomTabPanel>
                 
                 <CustomTabPanel value={tabValue} index={1}>
-                    <ProjectList projects={activeProjects} showActions={false} onUpdate={handleUpdate} onComplete={handleComplete} getStatusColor={() => 'warning'} formatDate={(d) => d ? new Date(d).toLocaleDateString() : ''} />
+                    <ProjectList projects={displayedActive} showActions={false} onUpdate={handleUpdate} onComplete={handleComplete} getStatusColor={() => 'warning'} formatDate={formatDate} />
                 </CustomTabPanel>
 
                 <CustomTabPanel value={tabValue} index={2}>
-                    <ProjectList projects={portfolioProjects} showActions={false} getStatusColor={() => 'success'} formatDate={(d) => d ? new Date(d).toLocaleDateString() : ''} />
+                    <ProjectList projects={displayedPortfolio} showActions={false} getStatusColor={() => 'success'} formatDate={formatDate} />
                 </CustomTabPanel>
             </section>
 
-            <BidModal open={openBidModal} onClose={() => setOpenBidModal(false)} onSubmit={handleBidSubmit} />
+            <BidModal open={openBidModal} onClose={() => setOpenBidModal(false)} onSubmit={handleBidSubmit} project={activeProject} />
             <UpdateModal open={openUpdateModal} onClose={() => setOpenUpdateModal(false)} onSubmit={handleUpdateSubmit} />
             
             <ProjectCompletionModal 

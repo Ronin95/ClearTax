@@ -70,9 +70,8 @@ export default function ProjectList({ projects, showActions, isCommunityTab, onE
                     <CardContent sx={{ position: 'relative' }}>
                         
                         <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            
-                                                        {/* --- FUND PROJECT BUTTON --- */}
-                            {isCommunityTab && proj.status === 'Proposed' && (
+                            {/* --- FUND PROJECT BUTTON --- */}
+                            {(proj.status === 'Proposed' || proj.status === 'Funding Extension') && (
                                 <Button 
                                     variant="contained"
                                     color="primary"

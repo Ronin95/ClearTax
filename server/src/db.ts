@@ -18,11 +18,13 @@ export async function initDB() {
 
         const defaultStatuses = [
             { name: 'Proposed', color: 'default' },
-            { name: 'Approved', color: 'info' },
+            { name: 'Funding Approved', color: 'info' },
             { name: 'In Progress', color: 'warning' },
             { name: 'Pending Completion', color: 'secondary' },
-            { name: 'Completed', color: 'success' }
+            { name: 'Completed', color: 'success' },
+            { name: 'Funding Extension', color: 'warning' }
         ];
+
         for (const status of defaultStatuses) {
             await pool.query(`
                 INSERT INTO project_statuses (name, color) 

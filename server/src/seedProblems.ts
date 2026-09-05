@@ -193,7 +193,7 @@ async function seedProblems() {
             .filter(id => id in templates); 
 
         // NEW: Fetch all valid status names directly from the database table
-        const statusesRes = await pool.query('SELECT name FROM project_statuses;');
+        const statusesRes = await pool.query("SELECT name FROM project_statuses WHERE name != 'Funding Extension';");
         const dbStatuses = statusesRes.rows.map(r => r.name);
 
         if (dbStatuses.length === 0) {
@@ -232,10 +232,23 @@ async function seedProblems() {
                 const latitude = faker.location.latitude({ min: 47.5, max: 48.8, precision: 6 });
                 const longitude = faker.location.longitude({ min: 15.5, max: 17.0, precision: 6 });
 
-                const amountRaised = faker.number.float({ min: 0, max: 2000, fractionDigits: 2 });
                 const targetFunding = faker.number.float({ min: 2500, max: 15000, fractionDigits: 2 });
                 const creatorWork = faker.datatype.boolean();
                 const status = faker.helpers.arrayElement(dbStatuses);
+
+                // Dynamically calculate amountRaised based on the randomly selected Status!
+                let amountRaised = 0;
+                if (status === 'Proposed' || status === 'Rejected') {
+                    // Not fully funded yet (guaranteed to be below target)
+                    amountRaised = faker.number.float({ min: 0, max: targetFunding - 1, fractionDigits: 2 });
+                } else if (status === 'Completed') {
+                    // NO LEFTOVER MONEY! Excess was automatically sent to the National Debt!
+                    amountRaised = targetFunding;
+                } else {
+                    // Funding Approved, In Progress, or Pending Completion
+                    // Must be fully funded or overfunded (Target + up to €1000 extra)
+                    amountRaised = targetFunding + faker.number.float({ min: 0, max: 1000, fractionDigits: 2 });
+                }
                 
                 const problemDate = faker.date.between({ from: randomUser.created_at, to: new Date() });
 

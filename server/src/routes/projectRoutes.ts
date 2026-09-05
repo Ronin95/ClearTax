@@ -274,13 +274,19 @@ router.post('/:id/approve', verifyToken, upload.array('files'), async (req, res)
             `, [projectId, userId, comment, uploadedFileNames, fundAmount]);
 
             // 5. Check if Funding Goal is Met!
-            const projRes = await client.query('SELECT amount_raised, target_funding FROM open_problems WHERE id = $1', [projectId]);
+            const projRes = await client.query('SELECT amount_raised, target_funding, assigned_company_id, status FROM open_problems WHERE id = $1', [projectId]);
             const currentRaised = parseFloat(projRes.rows[0].amount_raised);
             const targetGoal = parseFloat(projRes.rows[0].target_funding);
-
-            // If it met or exceeded the goal, approve it!
+            const assignedCompanyId = projRes.rows[0].assigned_company_id;
+            const currentStatus = projRes.rows[0].status;
+            // If it met or exceeded the goal, update the status!
             if (currentRaised >= targetGoal) {
-                await client.query(`UPDATE open_problems SET status = 'Approved' WHERE id = $1 AND status = 'Proposed'`, [projectId]);
+                if (assignedCompanyId && currentStatus === 'Funding Extension') {
+                    await client.query(`UPDATE open_problems SET status = 'In Progress' WHERE id = $1`, [projectId]);
+                } else if (currentStatus === 'Proposed') {
+                    // It now goes to Funding Approved!
+                    await client.query(`UPDATE open_problems SET status = 'Funding Approved' WHERE id = $1`, [projectId]); 
+                }
             }
 
             await client.query('COMMIT'); // Commit Transaction!
@@ -381,24 +387,46 @@ router.get('/:id/completion', verifyToken, async (req, res) => {
 // GET: Tender Board (Approved projects looking for a company)
 router.get('/tender-board', verifyToken, async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM open_problems WHERE status = 'Approved' AND assigned_company_id IS NULL ORDER BY created_at DESC");
+        const result = await pool.query("SELECT * FROM open_problems WHERE status = 'Funding Approved' AND assigned_company_id IS NULL ORDER BY created_at DESC");
         res.json({ projects: result.rows });
     } catch (err) { res.status(500).json({ error: 'Server error fetching tender board' }); }
 });
 
 // POST: Submit a Bid (Company Action)
-router.post('/:id/bids', verifyToken, async (req, res) => {
+router.post('/:id/bids', verifyToken, upload.array('files'), async (req, res) => {
     try {
         const { estimatedCost, pitch, startDate, endDate } = req.body;
         const companyId = (req as any).user.id;
         const projectId = req.params.id;
+
+        // Handle PDF file uploads
+        const files = req.files as Express.Multer.File[];
+        const uploadedFileNames: string[] = [];
+        
+        if (files && files.length > 0) {
+            for (const file of files) {
+                const uniqueFileName = await uploadToS3(file, 'cleartax-file-uploads');
+                uploadedFileNames.push(uniqueFileName);
+            }
+        }
         
         await pool.query(
-            "INSERT INTO project_bids (project_id, company_id, estimated_cost, pitch, estimated_start_date, estimated_end_date) VALUES ($1, $2, $3, $4, $5, $6)",
-            [projectId, companyId, estimatedCost, pitch, startDate || null, endDate || null]
+            "INSERT INTO project_bids (project_id, company_id, estimated_cost, pitch, estimated_start_date, estimated_end_date, file_list) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            [
+                projectId, 
+                companyId, 
+                parseFloat(estimatedCost) || 0, 
+                pitch, 
+                startDate || null, 
+                endDate || null, 
+                uploadedFileNames
+            ]
         );
         res.json({ message: "Bid submitted successfully" });
-    } catch (err) { res.status(500).json({ error: 'Server error submitting bid' }); }
+    } catch (err) { 
+        console.error("Bid error:", err);
+        res.status(500).json({ error: 'Server error submitting bid' }); 
+    }
 });
 
 // GET: View all Bids for a Project (Creator Action)
@@ -420,19 +448,34 @@ router.post('/:id/accept-bid', verifyToken, async (req, res) => {
         const { bidId } = req.body;
         const projectId = req.params.id;
         
-        const bidRes = await pool.query("SELECT company_id FROM project_bids WHERE id = $1", [bidId]);
+        const bidRes = await pool.query("SELECT company_id, estimated_cost FROM project_bids WHERE id = $1", [bidId]);
         if(bidRes.rows.length === 0) return res.status(404).json({error: "Bid not found"});
         
         const companyId = bidRes.rows[0].company_id;
+        const estimatedCost = parseFloat(bidRes.rows[0].estimated_cost);
+
+        const projectRes = await pool.query("SELECT amount_raised FROM open_problems WHERE id = $1", [projectId]);
+        const amountRaised = parseFloat(projectRes.rows[0].amount_raised);
 
         // Accept this bid, reject all others
         await pool.query("UPDATE project_bids SET status = 'Accepted' WHERE id = $1", [bidId]);
         await pool.query("UPDATE project_bids SET status = 'Rejected' WHERE project_id = $1 AND id != $2", [projectId, bidId]);
         
-        // Assign company and move project to In Progress
-        await pool.query("UPDATE open_problems SET assigned_company_id = $1, status = 'In Progress' WHERE id = $2", [companyId, projectId]);
-        
-        res.json({ message: "Bid accepted. Project is now In Progress!" });
+        if (estimatedCost > amountRaised) {
+            // Deficit! Project needs more money before it can start.
+            await pool.query(
+                "UPDATE open_problems SET assigned_company_id = $1, status = 'Funding Extension', target_funding = $2 WHERE id = $3", 
+                [companyId, estimatedCost, projectId]
+            );
+            res.json({ message: "Bid accepted. Project requires additional funding to proceed." });
+        } else {
+            // Fully funded! Go straight to In Progress.
+            await pool.query(
+                "UPDATE open_problems SET assigned_company_id = $1, status = 'In Progress' WHERE id = $2", 
+                [companyId, projectId]
+            );
+            res.json({ message: "Bid accepted. Project is now In Progress!" });
+        }
     } catch (err) { res.status(500).json({ error: 'Server error accepting bid' }); }
 });
 
@@ -463,23 +506,50 @@ router.get('/:id/updates', verifyToken, async (req, res) => {
 
 // POST: Verify Completion Sign-off (User Action)
 router.post('/:id/verify-completion', verifyToken, async (req, res) => {
+    const client = await pool.connect();
     try {
         const projectId = req.params.id;
         const userId = (req as any).user.id;
         
+        await client.query('BEGIN');
+
         // Record the sign-off
-        await pool.query("INSERT INTO project_completion_approvals (project_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [projectId, userId]);
+        await client.query("INSERT INTO project_completion_approvals (project_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [projectId, userId]);
         
         // Check if we hit the required amount of sign-offs (e.g. 3 users)
-        const countRes = await pool.query("SELECT COUNT(*) FROM project_completion_approvals WHERE project_id = $1", [projectId]);
+        const countRes = await client.query("SELECT COUNT(*) FROM project_completion_approvals WHERE project_id = $1", [projectId]);
         
         if (parseInt(countRes.rows[0].count) >= 3) {
+            // Check if there is leftover money!
+            const projectRes = await client.query("SELECT amount_raised, target_funding FROM open_problems WHERE id = $1", [projectId]);
+            const amountRaised = parseFloat(projectRes.rows[0].amount_raised);
+            const targetFunding = parseFloat(projectRes.rows[0].target_funding);
+
+            if (amountRaised > targetFunding) {
+                const leftover = amountRaised - targetFunding;
+                
+                // 1. Create a contribution to the National Debt (category_id = 4)
+                await client.query(`
+                    INSERT INTO contributions (id, user_id, category_id, contributed_amount_by_user) 
+                    VALUES (gen_random_uuid(), $1, 4, $2)
+                `, [userId, leftover]); 
+
+                // 2. Adjust the project's amount_raised down so the money isn't double-counted
+                await client.query("UPDATE open_problems SET amount_raised = $1 WHERE id = $2", [targetFunding, projectId]);
+            }
+
             // Once verified by the community, officially complete it!
-            await pool.query("UPDATE open_problems SET status = 'Completed' WHERE id = $1", [projectId]);
+            await client.query("UPDATE open_problems SET status = 'Completed' WHERE id = $1", [projectId]);
         }
         
+        await client.query('COMMIT');
         res.json({ message: "Completion report verified by user" });
-    } catch (err) { res.status(500).json({ error: 'Server error verifying completion' }); }
+    } catch (err) { 
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: 'Server error verifying completion' }); 
+    } finally {
+        client.release();
+    }
 });
 
 export default router;

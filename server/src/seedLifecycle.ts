@@ -29,7 +29,7 @@ async function seedLifecycle() {
             for (let i = 0; i < biddingCompanies.length; i++) {
                 const comp = biddingCompanies[i];
                 // If the project is past "Approved", one of these bids MUST be Accepted!
-                const isWinner = (p.status !== 'Approved' && i === 0);
+                const isWinner = (p.status !== 'Funding Approved' && i === 0);
                 const bidStatus = isWinner ? 'Accepted' : 'Pending';
                 
                 if (isWinner) acceptedCompany = comp.id;
