@@ -57,7 +57,7 @@ export interface ProjectListProps {
     isCommunityTab?: boolean;
     onEdit?: (id: string) => void;
     onDelete?: (id: string) => void;
-    onApprove?: (id: string) => void;
+    onApprove?: (id: string, comment: string, fundedAmount: number, files: File[]) => Promise<void>;
     onComplete?: (id: string) => void;
     onViewCompletion?: (id: string) => void; 
     onEditCompletion?: (id: string) => void; 

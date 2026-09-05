@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 
@@ -13,6 +13,15 @@ export default function ProjectApprovalModal({ open, onClose, project, onApprove
     const [comment, setComment] = useState('');
     const [fundedAmount, setFundedAmount] = useState<number>(0);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+    // Reset state every time the modal opens!
+    useEffect(() => {
+        if (open) {
+            setComment('');
+            setFundedAmount(0);
+            setSelectedFiles([]);
+        }
+    }, [open, project]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {

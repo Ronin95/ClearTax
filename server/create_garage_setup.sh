@@ -10,7 +10,7 @@ echo "🚀 Starting Garage S3 Automated Setup..."
 
 # 1. Setup Layout
 echo "🔍 Extracting Garage Node ID..."
-NODE_ID=$(docker exec $CONTAINER_NAME /garage status | grep -o 'dc[a-z0-9]*' | head -n 1)
+NODE_ID=$(docker exec $CONTAINER_NAME /garage status | grep -oE '[0-9a-f]{16}' | head -n 1)
 
 if [ -z "$NODE_ID" ]; then
     echo "❌ Failed to find Node ID. Is Garage running?"
@@ -35,8 +35,8 @@ echo "🔑 Creating key: $UNIQUE_KEY_NAME..."
 KEY_OUTPUT=$(docker exec $CONTAINER_NAME /garage key create $UNIQUE_KEY_NAME)
 
 # Extract using grep/awk
-KEY_ID=$(echo "$KEY_OUTPUT" | grep "Key ID" | awk '{print $4}')
-SECRET_KEY=$(echo "$KEY_OUTPUT" | grep "Secret key" | awk '{print $4}')
+KEY_ID=$(echo "$KEY_OUTPUT" | grep "Key ID" | awk '{print $3}')
+SECRET_KEY=$(echo "$KEY_OUTPUT" | grep "Secret key" | awk '{print $3}')
 
 if [ -z "$KEY_ID" ] || [ -z "$SECRET_KEY" ]; then
     echo "❌ Failed to extract keys from Garage! Output was:"
@@ -49,8 +49,8 @@ echo "✅ Extracted Secret Key: $SECRET_KEY"
 
 # 4. Update .env
 echo "📝 Updating .env file with new credentials..."
-sed -i "s/^GARAGE_ACCESS_KEY=.*/GARAGE_ACCESS_KEY=$KEY_ID/" .env
-sed -i "s/^GARAGE_SECRET_KEY=.*/GARAGE_SECRET_KEY=$SECRET_KEY/" .env
+sed -i "s/^GARAGE_ACCESS_KEY=.*/GARAGE_ACCESS_KEY=$KEY_ID/" ../.env
+sed -i "s/^GARAGE_SECRET_KEY=.*/GARAGE_SECRET_KEY=$SECRET_KEY/" ../.env
 echo "✅ .env file successfully updated!"
 
 # 5. Grant Permissions using the specific KEY_ID (Prevents the "2 matching keys" error!)

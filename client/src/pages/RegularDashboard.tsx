@@ -281,13 +281,26 @@ export default function RegularDashboard() {
         }
     };
 
-    const handleApproveProject = async (id: string) => {
+    const handleApproveProject = async (id: string, comment: string, fundedAmount: number, files: File[]) => {
         try {
-            await axios.post(`http://localhost:3001/api/projects/${id}/approve`, {}, { withCredentials: true });
-            await fetchProjects(); // Refresh the list to show updated count and possible status change!
-        } catch (err) {
+            const formData = new FormData();
+            formData.append('comment', comment);
+            formData.append('fundedAmount', fundedAmount.toString());
+            files.forEach(file => formData.append('files', file));
+
+            await axios.post(`http://localhost:3001/api/projects/${id}/approve`, formData, { 
+                headers: { 'Content-Type': 'multipart/form-data' },
+                withCredentials: true 
+            });
+            await fetchProjects(); // Refresh the projects list
+            
+            // Re-fetch user data to instantly update the "Available Tax" balance!
+            const userResponse = await axios.get('http://localhost:3001/api/users/me', { withCredentials: true });
+            setAvailableTax(parseFloat(userResponse.data.user.available_amount));
+        } catch (err: any) {
             console.error("Failed to approve project", err);
-            alert("Failed to approve project.");
+            // Throw so ProjectList knows it failed and can show the backend error message
+            throw err; 
         }
     };
 
