@@ -46,7 +46,7 @@ export default function BidsListModal({ open, onClose, projectId, onAcceptBid }:
                                         </Box>
                                     )}
                                     
-                                    {bid.status === 'Pending' && (
+                                    {(bid.status === 'Pending' || !bid.status) && (
                                         <Button variant="contained" color="primary" size="small" sx={{ mt: 2 }} onClick={() => onAcceptBid(bid.id)}>
                                             Accept Proposal
                                         </Button>

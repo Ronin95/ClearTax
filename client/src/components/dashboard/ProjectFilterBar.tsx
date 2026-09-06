@@ -21,7 +21,6 @@ export default function ProjectFilterBar({
                     <Chip
                         key={status.name}
                         label={status.name}
-                        // Use the chip color if selected, otherwise keep it default/grayed out
                         color={selectedStatus === status.name ? (status.color as any) : 'default'}
                         variant={selectedStatus === status.name ? 'filled' : 'outlined'}
                         onClick={() => onStatusToggle(status.name)}

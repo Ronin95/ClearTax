@@ -478,6 +478,7 @@ export default function RegularDashboard() {
                     <ProjectList 
                         projects={displayedMyProjects} 
                         showActions={true} 
+                        onApprove={handleApproveProject}
                         onEdit={handleEditProject} 
                         onDelete={handleDeleteProject} 
                         onComplete={handleOpenComplete}

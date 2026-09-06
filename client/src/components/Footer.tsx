@@ -8,7 +8,7 @@ const Footer = () => {
       <Container maxWidth="lg">
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems="center">
           <Typography variant="body2" color="text.secondary">
-            © {new Date().getFullYear()} ClearTax.
+            © {new Date().getFullYear()} ClearTax
           </Typography>
           <Stack direction="row" spacing={3}>
             <MuiLink component={RouterLink} to="/privacy" color="inherit" underline="hover">

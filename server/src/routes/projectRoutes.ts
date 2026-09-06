@@ -392,6 +392,39 @@ router.get('/tender-board', verifyToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Server error fetching tender board' }); }
 });
 
+// GET: Project IDs that the logged-in company has already submitted a bid for
+router.get('/my-bids', verifyToken, async (req, res) => {
+    try {
+        const companyId = (req as any).user.id;
+        const result = await pool.query("SELECT project_id FROM project_bids WHERE company_id = $1", [companyId]);
+        // Extract just the array of IDs
+        res.json({ bidProjectIds: result.rows.map(r => r.project_id) });
+    } catch (err) {
+        console.error("Error fetching my bids:", err);
+        res.status(500).json({ error: "Failed to fetch bids" });
+    }
+});
+
+// GET: Projects where the logged-in company WON the bid (Active Contracts & Portfolio)
+router.get('/my-contracts', verifyToken, async (req, res) => {
+    try {
+        const companyId = (req as any).user.id;
+        
+        const result = await pool.query(`
+            SELECT p.* 
+            FROM open_problems p
+            JOIN project_bids b ON p.id = b.project_id
+            WHERE b.company_id = $1 AND b.status = 'Accepted'
+            ORDER BY p.created_at DESC
+        `, [companyId]);
+
+        res.json({ projects: result.rows });
+    } catch (err) {
+        console.error("Error fetching company contracts:", err);
+        res.status(500).json({ error: "Failed to fetch contracts" });
+    }
+});
+
 // POST: Submit a Bid (Company Action)
 router.post('/:id/bids', verifyToken, upload.array('files'), async (req, res) => {
     try {

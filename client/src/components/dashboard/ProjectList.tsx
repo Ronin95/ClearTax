@@ -7,7 +7,7 @@ import { ProjectListProps } from '../../types/dashboardTypes';
 import ProjectApprovalModal from './ProjectApprovalModal';
 import { useState } from 'react';
 
-export default function ProjectList({ projects, showActions, isCommunityTab, onEdit, onDelete, onApprove, onComplete, onViewCompletion, onEditCompletion, onBid, onUpdate, onViewBids, onViewUpdates, onVerifyCompletion, getStatusColor, formatDate }: ProjectListProps) {
+export default function ProjectList({ projects, showActions, isCommunityTab, onEdit, onDelete, onApprove, onComplete, onViewCompletion, onEditCompletion, onBid, onUpdate, onViewBids, onViewUpdates, onVerifyCompletion, getStatusColor, formatDate, biddedProjectIds = [] }: ProjectListProps) {
     const [approvalModalOpen, setApprovalModalOpen] = useState(false);
     const [selectedProjectForApproval, setSelectedProjectForApproval] = useState<any>(null);
     
@@ -68,102 +68,114 @@ export default function ProjectList({ projects, showActions, isCommunityTab, onE
             {projects.map((proj) => (
                 <Card key={proj.id} variant="outlined">
                     <CardContent sx={{ position: 'relative' }}>
-                        
-                        <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {/* --- FUND PROJECT BUTTON --- */}
-                            {(proj.status === 'Proposed' || proj.status === 'Funding Extension') && (
-                                <Button 
-                                    variant="contained"
-                                    color="primary"
-                                    size="small"
-                                    onClick={() => {
-                                        setSelectedProjectForApproval(proj);
-                                        setApprovalModalOpen(true);
-                                    }}
-                                >
-                                    Fund Project
-                                </Button>
-                            )}
-
-                            <Chip 
-                                label={proj.status} 
-                                color={getStatusColor(proj.status)} 
-                                size="small" 
-                                sx={{ fontWeight: 'bold' }}
-                            />
-                            {showActions && onEdit && onDelete && proj.status !== 'Completed' && (
-                                <>
-                                    <IconButton size="small" onClick={() => onEdit(proj.id)} color="primary">
-                                        <EditIcon />
-                                    </IconButton>
-                                    <IconButton size="small" onClick={() => onDelete(proj.id)} color="error">
-                                        <DeleteIcon />
-                                    </IconButton>
-                                </>
-                            )}
-                            {/* --- COMPLETION BUTTON --- */}
-                            {onComplete && proj.status === 'In Progress' && (
-                                <Button 
-                                    variant="contained"
-                                    color="success"
-                                    size="small"
-                                    onClick={() => onComplete(proj.id)}
-                                >
-                                    Mark as Completed
-                                </Button>
-                            )}
-                            {/* --- VIEW PROPOSALS BUTTON (For Creators) --- */}
-                            {onViewBids && proj.status === 'Approved' && (
-                                <Button variant="outlined" color="primary" size="small" onClick={() => onViewBids(proj.id)}>
-                                    View Proposals
-                                </Button>
-                            )}
+                        {/* --- RESPONSIVE FLEX HEADER --- */}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 1 }}>
                             
-                            {/* --- VIEW TIMELINE BUTTON (Public) --- */}
-                            {onViewUpdates && (proj.status === 'In Progress' || proj.status === 'Pending Completion' || proj.status === 'Completed') && (
-                                <Button variant="outlined" color="info" size="small" onClick={() => onViewUpdates(proj.id)}>
-                                    View Timeline
-                                </Button>
-                            )}
-
-                            {/* --- VERIFY COMPLETION BUTTON (For Community) --- */}
-                            {onVerifyCompletion && proj.status === 'Pending Completion' && (
-                                <Button variant="contained" color="success" size="small" onClick={() => onVerifyCompletion(proj.id)}>
-                                    Verify Work
-                                </Button>
-                            )}
-                            {/* --- BID BUTTON (For Companies) --- */}
-                            {onBid && proj.status === 'Approved' && (
-                                <Button variant="contained" color="primary" size="small" onClick={() => onBid(proj.id)}>
-                                    Submit Proposal
-                                </Button>
-                            )}
-                            {/* --- PROGRESS UPDATE BUTTON (For Companies) --- */}
-                            {onUpdate && proj.status === 'In Progress' && (
-                                <Button variant="outlined" color="primary" size="small" onClick={() => onUpdate(proj.id)}>
-                                    Post Update
-                                </Button>
-                            )}
-                            {/* --- COMPLETED REPORT BUTTONS --- */}
-                            {proj.status === 'Completed' && (
-                                <Box sx={{ display: 'flex', gap: 1 }}>
-                                    {onViewCompletion && (
-                                        <Button variant="outlined" color="primary" size="small" onClick={() => onViewCompletion(proj.id)}>
-                                            View Report
-                                        </Button>
-                                    )}
-                                    {/* {showActions && onEditCompletion && (
-                                        <Button variant="contained" color="secondary" size="small" onClick={() => onEditCompletion(proj.id)}>
-                                            Edit Report
-                                        </Button>
-                                    )} */}
-                                </Box>
-                            )}
+                            {/* LEFT SIDE: Title & Category */}
+                            <Box sx={{ flex: 1, minWidth: '250px' }}>
+                                <Typography variant="h6" fontWeight="bold" sx={{ wordBreak: 'break-word' }}>
+                                    {proj.title}
+                                </Typography>
+                                <Typography color="primary" variant="subtitle2">
+                                    {proj.category}
+                                </Typography>
+                            </Box>
+                            {/* RIGHT SIDE: Action Buttons & Chips */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, justifyContent: 'flex-end' }}>
+                                
+                                {/* --- FUND PROJECT BUTTON --- */}
+                                {onApprove && (proj.status === 'Proposed' || proj.status === 'Funding Extension') && (
+                                    <Button 
+                                        variant="contained"
+                                        color="primary"
+                                        size="small"
+                                        onClick={() => {
+                                            setSelectedProjectForApproval(proj);
+                                            setApprovalModalOpen(true);
+                                        }}
+                                    >
+                                        Fund Project
+                                    </Button>
+                                )}
+                                <Chip 
+                                    label={proj.status} 
+                                    color={getStatusColor(proj.status)} 
+                                    size="small" 
+                                    sx={{ fontWeight: 'bold' }}
+                                />
+                                {showActions && onEdit && onDelete && proj.status !== 'Completed' && (
+                                    <>
+                                        <IconButton size="small" onClick={() => onEdit(proj.id)} color="primary">
+                                            <EditIcon />
+                                        </IconButton>
+                                        <IconButton size="small" onClick={() => onDelete(proj.id)} color="error">
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </>
+                                )}
+                                {/* --- COMPLETION BUTTON --- */}
+                                {onComplete && proj.status === 'In Progress' && (
+                                    <Button 
+                                        variant="contained"
+                                        color="success"
+                                        size="small"
+                                        onClick={() => onComplete(proj.id)}
+                                    >
+                                        Mark as Completed
+                                    </Button>
+                                )}
+                                {/* --- VIEW PROPOSALS BUTTON (For Creators) --- */}
+                                {onViewBids && proj.status === 'Funding Approved' && (
+                                    <Button variant="outlined" color="primary" size="small" onClick={() => onViewBids(proj.id)}>
+                                        View Proposals
+                                    </Button>
+                                )}
+                                
+                                {/* --- VIEW TIMELINE BUTTON (Public) --- */}
+                                {onViewUpdates && (proj.status === 'In Progress' || proj.status === 'Pending Completion' || proj.status === 'Completed') && (
+                                    <Button variant="outlined" color="info" size="small" onClick={() => onViewUpdates(proj.id)}>
+                                        View Timeline
+                                    </Button>
+                                )}
+                                {/* --- VERIFY COMPLETION BUTTON (For Community) --- */}
+                                {onVerifyCompletion && proj.status === 'Pending Completion' && (
+                                    <Button variant="contained" color="success" size="small" onClick={() => onVerifyCompletion(proj.id)}>
+                                        Verify Work
+                                    </Button>
+                                )}
+                                {/* --- BID BUTTON (For Companies) --- */}
+                                {onBid && proj.status === 'Funding Approved' && (
+                                    <Button 
+                                        variant="contained" 
+                                        color={biddedProjectIds.includes(proj.id) ? "inherit" : "primary"}
+                                        size="small" 
+                                        onClick={() => onBid(proj.id)}
+                                        disabled={biddedProjectIds.includes(proj.id)}
+                                    >
+                                        {biddedProjectIds.includes(proj.id) ? "Proposal Submitted" : "Submit Proposal"}
+                                    </Button>
+                                )}
+                                {/* --- PROGRESS UPDATE BUTTON (For Companies) --- */}
+                                {onUpdate && proj.status === 'In Progress' && (
+                                    <Button variant="outlined" color="primary" size="small" onClick={() => onUpdate(proj.id)}>
+                                        Post Update
+                                    </Button>
+                                )}
+                                {/* --- COMPLETED REPORT BUTTONS --- */}
+                                {proj.status === 'Completed' && (
+                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                        {onViewCompletion && (
+                                            <Button variant="outlined" color="primary" size="small" onClick={() => onViewCompletion(proj.id)}>
+                                                View Report
+                                            </Button>
+                                        )}
+                                    </Box>
+                                )}
+                            </Box>
                         </Box>
-                        <Typography variant="h6" fontWeight="bold" sx={{ pr: 30 }}>{proj.title}</Typography>
-                        <Typography color="primary" variant="subtitle2" gutterBottom>{proj.category}</Typography>
+                        {/* --- DESCRIPTION --- */}
                         <Typography variant="body2" sx={{ mb: 2 }}>{proj.description}</Typography>
-                                                {/* --- FUNDING PROGRESS BAR --- */}
+                        {/* --- FUNDING PROGRESS BAR --- */}
                         <Box sx={{ mt: 2, mb: 3 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                                 <Typography variant="body2" color="text.secondary">

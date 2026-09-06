@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Container, Typography, Box, Tabs, Tab, CircularProgress, TextField, InputAdornment } from "@mui/material";
+import React, { useEffect, useState } from 'react';
+import { Container, Typography, Box, Tabs, Tab, CircularProgress, TextField, InputAdornment, Pagination } from "@mui/material";
 import SearchIcon from '@mui/icons-material/Search';
 import axios from 'axios';
 
@@ -16,6 +16,11 @@ export default function CompanyDashboard() {
     const [loading, setLoading] = useState(true);
     const [tabValue, setTabValue] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
+    const [biddedProjectIds, setBiddedProjectIds] = useState<string[]>([]);
+
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const itemsPerPage = 5;
 
     // The arrays containing all projects for each tab
     const [tenderProjects, setTenderProjects] = useState<ProjectData[]>([]);
@@ -69,10 +74,13 @@ export default function CompanyDashboard() {
             const userRes = await axios.get('http://localhost:3001/api/users/me', { withCredentials: true });
             setUser(userRes.data.user);
 
+            const bidsRes = await axios.get('http://localhost:3001/api/projects/my-bids', { withCredentials: true });
+            setBiddedProjectIds(bidsRes.data.bidProjectIds);
+
             const tenderRes = await axios.get('http://localhost:3001/api/projects/tender-board', { withCredentials: true });
             setTenderProjects(formatProjects(tenderRes.data.projects));
 
-            const myRes = await axios.get('http://localhost:3001/api/projects', { withCredentials: true });
+            const myRes = await axios.get('http://localhost:3001/api/projects/my-contracts', { withCredentials: true });
             const allMyProjects = formatProjects(myRes.data.projects);
             
             setActiveProjects(allMyProjects.filter(p => p.status === 'In Progress' || p.status === 'Pending Completion'));
@@ -85,6 +93,15 @@ export default function CompanyDashboard() {
     };
 
     useEffect(() => { fetchDashboardData(); }, []);
+
+    // Reset pagination to page 1 whenever the user changes tabs or types a new search
+    useEffect(() => {
+        setPage(1);
+    }, [tabValue, searchQuery]);
+
+    const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
+        setPage(value);
+    };
 
     // Action Handlers
     const handleBid = (id: string) => { 
@@ -120,6 +137,8 @@ export default function CompanyDashboard() {
             });
             alert("Bid submitted successfully! Wait for the community to review it.");
             setOpenBidModal(false);
+            setBiddedProjectIds(prev => [...prev, activeProject.id]);
+            
         } catch (err) { alert("Failed to submit bid."); }
     };
 
@@ -167,9 +186,18 @@ export default function CompanyDashboard() {
         });
     };
 
+    const paginateProjects = (projects: ProjectData[]) => {
+        const startIndex = (page - 1) * itemsPerPage;
+        return projects.slice(startIndex, startIndex + itemsPerPage);
+    };
+
     const displayedTender = getFilteredProjects(tenderProjects);
     const displayedActive = getFilteredProjects(activeProjects);
     const displayedPortfolio = getFilteredProjects(portfolioProjects);
+
+    // Determine which array is currently active to calculate total pages
+    const currentProjects = tabValue === 0 ? displayedTender : tabValue === 1 ? displayedActive : displayedPortfolio;
+    const totalPages = Math.ceil(currentProjects.length / itemsPerPage);
 
     return (
         <Container sx={{ py: 8 }}>
@@ -209,16 +237,48 @@ export default function CompanyDashboard() {
                 </Box>
 
                 <CustomTabPanel value={tabValue} index={0}>
-                    <ProjectList projects={displayedTender} showActions={false} onBid={handleBid} getStatusColor={() => 'info'} formatDate={formatDate} />
+                    <ProjectList 
+                        projects={paginateProjects(displayedTender)} 
+                        showActions={true} 
+                        onBid={handleBid} 
+                        biddedProjectIds={biddedProjectIds} 
+                        getStatusColor={() => 'info'} 
+                        formatDate={formatDate} 
+                    />
                 </CustomTabPanel>
                 
                 <CustomTabPanel value={tabValue} index={1}>
-                    <ProjectList projects={displayedActive} showActions={false} onUpdate={handleUpdate} onComplete={handleComplete} getStatusColor={() => 'warning'} formatDate={formatDate} />
+                    <ProjectList 
+                        projects={paginateProjects(displayedActive)} 
+                        showActions={true} 
+                        onUpdate={handleUpdate} 
+                        onComplete={handleComplete} 
+                        getStatusColor={() => 'warning'} 
+                        formatDate={formatDate} 
+                    />
                 </CustomTabPanel>
 
                 <CustomTabPanel value={tabValue} index={2}>
-                    <ProjectList projects={displayedPortfolio} showActions={false} getStatusColor={() => 'success'} formatDate={formatDate} />
+                    <ProjectList 
+                        projects={paginateProjects(displayedPortfolio)} 
+                        showActions={true} 
+                        getStatusColor={() => 'success'} 
+                        formatDate={formatDate} 
+                    />
                 </CustomTabPanel>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 4 }}>
+                        <Pagination 
+                            count={totalPages} 
+                            page={page} 
+                            onChange={handlePageChange} 
+                            color="primary" 
+                            size="large" 
+                        />
+                    </Box>
+                )}
             </section>
 
             <BidModal open={openBidModal} onClose={() => setOpenBidModal(false)} onSubmit={handleBidSubmit} project={activeProject} />

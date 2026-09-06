@@ -68,6 +68,7 @@ export interface ProjectListProps {
     onViewBids?: (id: string) => void;
     onViewUpdates?: (id: string) => void;
     onVerifyCompletion?: (id: string) => void;
+    biddedProjectIds?: string[];
 }
 
 export interface SolidarityModalProps {
