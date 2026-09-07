@@ -158,6 +158,7 @@ export async function initDB() {
                 company_id UUID REFERENCES users(id) ON DELETE CASCADE,
                 message TEXT NOT NULL,
                 image_url TEXT,
+                file_url TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);

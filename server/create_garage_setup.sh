@@ -59,9 +59,12 @@ docker exec $CONTAINER_NAME /garage bucket allow $IMAGE_BUCKET --read --write --
 docker exec $CONTAINER_NAME /garage bucket allow $FILE_BUCKET --read --write --owner --key $KEY_ID
 echo "✅ Permissions granted!"
 
-# 6. Restart Node.js Backend
-echo "🔄 Restarting the Node.js backend to apply the new .env file..."
-docker restart $NODEJS_CONTAINER
-echo "✅ Backend restarted!"
+# 6. Recreate Node.js Backend
+echo "🔄 Recreating the Node.js backend to apply the new .env file..."
+# Navigate up to the folder containing docker-compose.yml, recreate the container, then go back
+cd ..
+docker compose up -d $NODEJS_CONTAINER
+cd server
+echo "✅ Backend recreated and new .env variables successfully loaded!"
 
 echo "🎉 Garage S3 Setup Complete! Everything is wired up automatically!"

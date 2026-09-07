@@ -234,23 +234,29 @@ router.post('/:id/approve', verifyToken, upload.array('files'), async (req, res)
         
         if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-        const { comment, fundedAmount } = req.body;
-        const fundAmount = parseFloat(fundedAmount || '0');
+        // 1. SAFETIES: Ensure we never pass 'undefined' to the database driver!
+        const comment = req.body.comment || '';
+        const fundAmount = parseFloat(req.body.fundedAmount || '0');
 
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
 
-            // 1. Check User's Available Money
+            // 2. SAFETIES: Ensure the user actually exists before accessing rows[0]
             const userRes = await client.query('SELECT available_amount FROM users WHERE id = $1', [userId]);
-            const userMoney = parseFloat(userRes.rows[0]?.available_amount || '0');
+            if (userRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: "User not found in database." });
+            }
+            
+            const userMoney = parseFloat(userRes.rows[0].available_amount || '0');
 
             if (fundAmount > 0 && userMoney < fundAmount) {
                 await client.query('ROLLBACK');
                 return res.status(400).json({ error: "Not enough money available. Please extract your money from the RIS." });
             }
 
-            // 2. Process File Uploads to Garage S3
+            // 3. Process File Uploads to Garage S3
             const files = req.files as Express.Multer.File[];
             const uploadedFileNames: string[] = [];
             
@@ -261,31 +267,35 @@ router.post('/:id/approve', verifyToken, upload.array('files'), async (req, res)
                 }
             }
 
-            // 3. Move the Money
+            // 4. Move the Money
             if (fundAmount > 0) {
                 await client.query('UPDATE users SET available_amount = available_amount - $1, contributed_amount = contributed_amount + $1 WHERE id = $2', [fundAmount, userId]);
                 await client.query('UPDATE open_problems SET amount_raised = amount_raised + $1 WHERE id = $2', [fundAmount, projectId]);
             }
 
-            // 4. Save the Approval / Funding Record
+            // 5. Save the Approval / Funding Record
+            // CRITICAL FIX: We added ::TEXT[] to $4 so PostgreSQL knows what type the empty array is!
             await client.query(`
                 INSERT INTO project_approvals (project_id, user_id, comment, file_list, funded_amount)
-                VALUES ($1, $2, $3, $4, $5)
+                VALUES ($1, $2, $3, $4::TEXT[], $5)
             `, [projectId, userId, comment, uploadedFileNames, fundAmount]);
 
-            // 5. Check if Funding Goal is Met!
+            // 6. Check if Funding Goal is Met!
             const projRes = await client.query('SELECT amount_raised, target_funding, assigned_company_id, status FROM open_problems WHERE id = $1', [projectId]);
-            const currentRaised = parseFloat(projRes.rows[0].amount_raised);
-            const targetGoal = parseFloat(projRes.rows[0].target_funding);
-            const assignedCompanyId = projRes.rows[0].assigned_company_id;
-            const currentStatus = projRes.rows[0].status;
-            // If it met or exceeded the goal, update the status!
-            if (currentRaised >= targetGoal) {
-                if (assignedCompanyId && currentStatus === 'Funding Extension') {
-                    await client.query(`UPDATE open_problems SET status = 'In Progress' WHERE id = $1`, [projectId]);
-                } else if (currentStatus === 'Proposed') {
-                    // It now goes to Funding Approved!
-                    await client.query(`UPDATE open_problems SET status = 'Funding Approved' WHERE id = $1`, [projectId]); 
+            
+            if (projRes.rows.length > 0) {
+                const currentRaised = parseFloat(projRes.rows[0].amount_raised || '0');
+                const targetGoal = parseFloat(projRes.rows[0].target_funding || '0');
+                const assignedCompanyId = projRes.rows[0].assigned_company_id;
+                const currentStatus = projRes.rows[0].status;
+                
+                // If it met or exceeded the goal, update the status!
+                if (currentRaised >= targetGoal) {
+                    if (assignedCompanyId && currentStatus === 'Funding Extension') {
+                        await client.query(`UPDATE open_problems SET status = 'In Progress' WHERE id = $1`, [projectId]);
+                    } else if (currentStatus === 'Proposed') {
+                        await client.query(`UPDATE open_problems SET status = 'Funding Approved' WHERE id = $1`, [projectId]); 
+                    }
                 }
             }
 
@@ -300,13 +310,14 @@ router.post('/:id/approve', verifyToken, upload.array('files'), async (req, res)
             }
             
             console.error("Transaction Error:", err);
-            res.status(500).json({ error: "Server Error during funding" });
+            // CRITICAL FIX: Added err.message to the response so the frontend actually tells us WHAT broke!
+            res.status(500).json({ error: "Server Error during funding: " + err.message });
         } finally {
             client.release();
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Funding failed", error);
-        res.status(500).json({ error: "Failed to fund project" });
+        res.status(500).json({ error: "Failed to fund project: " + error.message });
     }
 });
 
@@ -512,27 +523,52 @@ router.post('/:id/accept-bid', verifyToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Server error accepting bid' }); }
 });
 
-// POST: Submit Progress Update (Company Action)
-router.post('/:id/updates', verifyToken, upload.single('image'), async (req, res) => {
+// POST: Submit Progress Update (Company & User Action)
+router.post('/:id/updates', verifyToken, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]), async (req, res) => {
     try {
         const { message } = req.body;
         const companyId = (req as any).user.id;
         const projectId = req.params.id;
         
         let imageUrl = null;
-        if (req.file) {
-            imageUrl = await uploadToS3(req.file, 'cleartax-image-uploads');
+        let pdfUrl = null;
+        
+        const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+        // Handle Image Upload
+        if (files && files['image'] && files['image'].length > 0) {
+            imageUrl = await uploadToS3(files['image'][0], 'cleartax-image-uploads');
         }
         
-        await pool.query("INSERT INTO project_updates (project_id, company_id, message, image_url) VALUES ($1, $2, $3, $4)", [projectId, companyId, message, imageUrl]);
+        // Handle PDF Upload
+        if (files && files['pdf'] && files['pdf'].length > 0) {
+            pdfUrl = await uploadToS3(files['pdf'][0], 'cleartax-file-uploads');
+        }
+        
+        // Save to Database
+        await pool.query(
+            "INSERT INTO project_updates (project_id, company_id, message, image_url, file_url) VALUES ($1, $2, $3, $4, $5)", 
+            [projectId, companyId, message, imageUrl, pdfUrl]
+        );
+        
         res.json({ message: "Progress update posted" });
-    } catch (err) { res.status(500).json({ error: 'Server error posting update' }); }
+    } catch (err) { 
+        console.error("Server error posting update:", err);
+        res.status(500).json({ error: 'Server error posting update' }); 
+    }
 });
 
 // GET: View Progress Updates (Public Action)
 router.get('/:id/updates', verifyToken, async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM project_updates WHERE project_id = $1 ORDER BY created_at DESC", [req.params.id]);
+        // Join the users table to get the sender's name and role
+        const result = await pool.query(`
+            SELECT u.*, us.username as sender_name, us.role as sender_role 
+            FROM project_updates u 
+            JOIN users us ON u.company_id = us.id 
+            WHERE u.project_id = $1 
+            ORDER BY u.created_at ASC
+        `, [req.params.id]);
         res.json({ updates: result.rows });
     } catch (err) { res.status(500).json({ error: 'Server error fetching updates' }); }
 });
@@ -553,24 +589,29 @@ router.post('/:id/verify-completion', verifyToken, async (req, res) => {
         const countRes = await client.query("SELECT COUNT(*) FROM project_completion_approvals WHERE project_id = $1", [projectId]);
         
         if (parseInt(countRes.rows[0].count) >= 3) {
-            // Check if there is leftover money!
-            const projectRes = await client.query("SELECT amount_raised, target_funding FROM open_problems WHERE id = $1", [projectId]);
+            
+            // Fetch the actual FINAL COST from the company's completion report!
+            const projectRes = await client.query(`
+                SELECT op.amount_raised, pc.final_cost 
+                FROM open_problems op
+                JOIN project_completions pc ON op.id = pc.project_id
+                WHERE op.id = $1
+            `, [projectId]);
+            
             const amountRaised = parseFloat(projectRes.rows[0].amount_raised);
-            const targetFunding = parseFloat(projectRes.rows[0].target_funding);
-
-            if (amountRaised > targetFunding) {
-                const leftover = amountRaised - targetFunding;
+            const finalCost = parseFloat(projectRes.rows[0].final_cost || '0');
+            // If they raised 100€ and the final cost was 25€, leftover is exactly 75€!
+            if (amountRaised > finalCost) {
+                const leftover = amountRaised - finalCost;
                 
-                // 1. Create a contribution to the National Debt (category_id = 4)
+                // 1. Send the TRUE leftover to the National Debt (category_id = 4)
                 await client.query(`
                     INSERT INTO contributions (id, user_id, category_id, contributed_amount_by_user) 
                     VALUES (gen_random_uuid(), $1, 4, $2)
                 `, [userId, leftover]); 
-
-                // 2. Adjust the project's amount_raised down so the money isn't double-counted
-                await client.query("UPDATE open_problems SET amount_raised = $1 WHERE id = $2", [targetFunding, projectId]);
+                // 2. Adjust the project's amount_raised down to exactly match the final cost
+                await client.query("UPDATE open_problems SET amount_raised = $1 WHERE id = $2", [finalCost, projectId]);
             }
-
             // Once verified by the community, officially complete it!
             await client.query("UPDATE open_problems SET status = 'Completed' WHERE id = $1", [projectId]);
         }

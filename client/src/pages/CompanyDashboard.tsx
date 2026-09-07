@@ -7,7 +7,7 @@ import { User, ProjectData, CompletionData } from '../types/dashboardTypes';
 import CustomTabPanel, { a11yProps } from '../components/common/CustomTabPanel';
 import ProjectList from '../components/dashboard/ProjectList';
 import BidModal from '../components/dashboard/BidModal';
-import UpdateModal from '../components/dashboard/UpdateModal';
+import ProjectTimelineModal from '../components/dashboard/ProjectTimelineModal';
 import ProjectCompletionModal from '../components/dashboard/ProjectCompletionModal';
 import CompanyStatsCards from '../components/dashboard/CompanyStatsCards';
 
@@ -26,6 +26,9 @@ export default function CompanyDashboard() {
     const [tenderProjects, setTenderProjects] = useState<ProjectData[]>([]);
     const [activeProjects, setActiveProjects] = useState<ProjectData[]>([]);
     const [portfolioProjects, setPortfolioProjects] = useState<ProjectData[]>([]);
+
+    const [updateModalOpen, setUpdateModalOpen] = useState(false);
+    const [selectedUpdateProjectId, setSelectedUpdateProjectId] = useState<string | null>(null);
 
     // The currently selected project for the Modals
     const [activeProject, setActiveProject] = useState<ProjectData | null>(null);
@@ -103,6 +106,11 @@ export default function CompanyDashboard() {
         setPage(value);
     };
 
+    const handleOpenUpdates = (projectId: string) => {
+        setSelectedUpdateProjectId(projectId);
+        setUpdateModalOpen(true);
+    };
+
     // Action Handlers
     const handleBid = (id: string) => { 
         const proj = tenderProjects.find(p => p.id === id) || activeProjects.find(p => p.id === id);
@@ -140,20 +148,6 @@ export default function CompanyDashboard() {
             setBiddedProjectIds(prev => [...prev, activeProject.id]);
             
         } catch (err) { alert("Failed to submit bid."); }
-    };
-
-    const handleUpdateSubmit = async (data: any) => {
-        if (!activeProject?.id) return;
-        const formData = new FormData();
-        formData.append('message', data.message);
-        if (data.image) formData.append('image', data.image);
-        try {
-            await axios.post(`http://localhost:3001/api/projects/${activeProject.id}/updates`, formData, { 
-                headers: { 'Content-Type': 'multipart/form-data' }, withCredentials: true 
-            });
-            alert("Update posted to the community!");
-            setOpenUpdateModal(false);
-        } catch (err) { alert("Failed to post update."); }
     };
 
     const handleCompleteProjectSubmit = async () => {
@@ -243,7 +237,8 @@ export default function CompanyDashboard() {
                         onBid={handleBid} 
                         biddedProjectIds={biddedProjectIds} 
                         getStatusColor={() => 'info'} 
-                        formatDate={formatDate} 
+                        formatDate={formatDate}
+                        onViewUpdates={handleOpenUpdates} 
                     />
                 </CustomTabPanel>
                 
@@ -254,7 +249,8 @@ export default function CompanyDashboard() {
                         onUpdate={handleUpdate} 
                         onComplete={handleComplete} 
                         getStatusColor={() => 'warning'} 
-                        formatDate={formatDate} 
+                        formatDate={formatDate}
+                        onViewUpdates={handleOpenUpdates} 
                     />
                 </CustomTabPanel>
 
@@ -263,7 +259,8 @@ export default function CompanyDashboard() {
                         projects={paginateProjects(displayedPortfolio)} 
                         showActions={true} 
                         getStatusColor={() => 'success'} 
-                        formatDate={formatDate} 
+                        formatDate={formatDate}
+                        onViewUpdates={handleOpenUpdates} 
                     />
                 </CustomTabPanel>
 
@@ -282,7 +279,11 @@ export default function CompanyDashboard() {
             </section>
 
             <BidModal open={openBidModal} onClose={() => setOpenBidModal(false)} onSubmit={handleBidSubmit} project={activeProject} />
-            <UpdateModal open={openUpdateModal} onClose={() => setOpenUpdateModal(false)} onSubmit={handleUpdateSubmit} />
+            <ProjectTimelineModal 
+                open={updateModalOpen} 
+                onClose={() => { setUpdateModalOpen(false); setSelectedUpdateProjectId(null); }} 
+                projectId={selectedUpdateProjectId} 
+            />
             
             <ProjectCompletionModal 
                 open={openCompletionModal} onClose={() => setOpenCompletionModal(false)}

@@ -19,7 +19,7 @@ import ProjectList from '../components/dashboard/ProjectList';
 import ProjectFilterBar from '../components/dashboard/ProjectFilterBar';
 import ProjectCompletionModal from '../components/dashboard/ProjectCompletionModal';
 import dayjs from 'dayjs';
-import UpdatesListModal from '../components/dashboard/UpdatesListModal';
+import ProjectTimelineModal from '../components/dashboard/ProjectTimelineModal';
 import BidsListModal from '../components/dashboard/BidsListModal';
 
 export default function RegularDashboard() {
@@ -33,6 +33,8 @@ export default function RegularDashboard() {
     const [debtStats, setDebtStats] = useState({ number_of_people: 0, amount_paid: 0 });
     const [solidarityInput, setSolidarityInput] = useState<string>('');
     const [isSubmittingDebt, setIsSubmittingDebt] = useState(false);
+    const [updateModalOpen, setUpdateModalOpen] = useState(false);
+    const [selectedUpdateProjectId, setSelectedUpdateProjectId] = useState<string | null>(null);
 
     const [user, setUser] = useState<User | null>(null);
     const [availableTax, setAvailableTax] = useState<number>(0);
@@ -66,7 +68,6 @@ export default function RegularDashboard() {
 
     const [activeActionId, setActiveActionId] = useState<string | null>(null);
     const [openBidsModal, setOpenBidsModal] = useState(false);
-    const [openUpdatesModal, setOpenUpdatesModal] = useState(false);
 
     useEffect(() => {
         setMyProjectsPage(1);
@@ -214,6 +215,11 @@ export default function RegularDashboard() {
         setProjectData({ id: '', title: '', category: 'Infrastructure', description: '', images: [], files: [], address: '', contributionAmount: '', ownTaxes: false, status: 'Proposed' });
         setOpenCreate(true);
     };
+
+    const handleOpenUpdates = (projectId: string) => {
+        setSelectedUpdateProjectId(projectId);
+        setUpdateModalOpen(true);
+};
 
     const handleCreateProject = async () => {
         const formData = new FormData();
@@ -398,7 +404,6 @@ export default function RegularDashboard() {
     };
 
     const handleViewBids = (id: string) => { setActiveActionId(id); setOpenBidsModal(true); };
-    const handleViewUpdates = (id: string) => { setActiveActionId(id); setOpenUpdatesModal(true); };
     
     const handleAcceptBid = async (bidId: string) => {
         if (!activeActionId) return;
@@ -476,7 +481,7 @@ export default function RegularDashboard() {
                 
                 <CustomTabPanel value={tabValue} index={0}>
                     <ProjectList 
-                        projects={displayedMyProjects} 
+                        projects={displayedMyProjects}
                         showActions={true} 
                         onApprove={handleApproveProject}
                         onEdit={handleEditProject} 
@@ -487,7 +492,7 @@ export default function RegularDashboard() {
                         getStatusColor={getStatusColor} 
                         formatDate={formatDate}
                         onViewBids={handleViewBids}
-                        onViewUpdates={handleViewUpdates}
+                        onViewUpdates={handleOpenUpdates}
                         onVerifyCompletion={handleVerifyCompletion}
                     />
                     {myTotalPages > 1 && (
@@ -546,7 +551,11 @@ export default function RegularDashboard() {
             />
 
             <BidsListModal open={openBidsModal} onClose={() => setOpenBidsModal(false)} projectId={activeActionId} onAcceptBid={handleAcceptBid} />
-            <UpdatesListModal open={openUpdatesModal} onClose={() => setOpenUpdatesModal(false)} projectId={activeActionId} />
+            <ProjectTimelineModal 
+                open={updateModalOpen} 
+                onClose={() => { setUpdateModalOpen(false); setSelectedUpdateProjectId(null); }} 
+                projectId={selectedUpdateProjectId} 
+            />
         </Container>
     );
 }

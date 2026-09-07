@@ -124,6 +124,7 @@ export default function ProjectList({ projects, showActions, isCommunityTab, onE
                                         Mark as Completed
                                     </Button>
                                 )}
+
                                 {/* --- VIEW PROPOSALS BUTTON (For Creators) --- */}
                                 {onViewBids && proj.status === 'Funding Approved' && (
                                     <Button variant="outlined" color="primary" size="small" onClick={() => onViewBids(proj.id)}>
@@ -131,18 +132,20 @@ export default function ProjectList({ projects, showActions, isCommunityTab, onE
                                     </Button>
                                 )}
                                 
-                                {/* --- VIEW TIMELINE BUTTON (Public) --- */}
+                                {/* --- COMBINED PROJECT UPDATES BUTTON --- */}
                                 {onViewUpdates && (proj.status === 'In Progress' || proj.status === 'Pending Completion' || proj.status === 'Completed') && (
-                                    <Button variant="outlined" color="info" size="small" onClick={() => onViewUpdates(proj.id)}>
-                                        View Timeline
+                                    <Button variant="outlined" color="primary" size="small" onClick={() => onViewUpdates(proj.id)}>
+                                        Project Updates
                                     </Button>
                                 )}
+
                                 {/* --- VERIFY COMPLETION BUTTON (For Community) --- */}
                                 {onVerifyCompletion && proj.status === 'Pending Completion' && (
                                     <Button variant="contained" color="success" size="small" onClick={() => onVerifyCompletion(proj.id)}>
                                         Verify Work
                                     </Button>
                                 )}
+
                                 {/* --- BID BUTTON (For Companies) --- */}
                                 {onBid && proj.status === 'Funding Approved' && (
                                     <Button 
@@ -153,12 +156,6 @@ export default function ProjectList({ projects, showActions, isCommunityTab, onE
                                         disabled={biddedProjectIds.includes(proj.id)}
                                     >
                                         {biddedProjectIds.includes(proj.id) ? "Proposal Submitted" : "Submit Proposal"}
-                                    </Button>
-                                )}
-                                {/* --- PROGRESS UPDATE BUTTON (For Companies) --- */}
-                                {onUpdate && proj.status === 'In Progress' && (
-                                    <Button variant="outlined" color="primary" size="small" onClick={() => onUpdate(proj.id)}>
-                                        Post Update
                                     </Button>
                                 )}
                                 {/* --- COMPLETED REPORT BUTTONS --- */}

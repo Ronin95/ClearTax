@@ -24,7 +24,8 @@ async function seedTransactions() {
             const randomUser = faker.helpers.arrayElement(users);
             const categoryId = faker.helpers.arrayElement(categoryIds);
             
-            const maxSpend = parseFloat(randomUser.available_amount) * 0.05;
+            // We use Math.max to guarantee that maxSpend is ALWAYS at least 10
+            const maxSpend = Math.max(10, parseFloat(randomUser.available_amount) * 0.05);
             const spendAmount = faker.number.float({ min: 10, max: maxSpend, fractionDigits: 2 });
 
             const transactionDate = faker.date.between({
