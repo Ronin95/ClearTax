@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography } from '@mui/material';
 import { DemoContainer } from '@mui/x-date-pickers/internals/demo';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -34,7 +34,7 @@ export default function BidModal({ open, onClose, onSubmit, project }: Props) {
         const dd = String(date.getDate()).padStart(2, '0');
         const hh = String(date.getHours()).padStart(2, '0');
         const min = String(date.getMinutes()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+        return `${yyyy}.${mm}.${dd} ${hh}:${min}`;
     };
 
     return (
@@ -71,8 +71,8 @@ export default function BidModal({ open, onClose, onSubmit, project }: Props) {
                     />
                     <LocalizationProvider dateAdapter={AdapterDayjs}>
                         <DemoContainer components={['DatePicker', 'DatePicker']}>
-                            <DatePicker label="Start Date" value={startDate} onChange={setStartDate as any} format="DD-MM-YYYY" />
-                            <DatePicker label="End Date" value={endDate} onChange={setEndDate as any} format="DD-MM-YYYY" />
+                            <DatePicker label="Start Date" value={startDate} onChange={setStartDate as any} format="DD.MM.YYYY" />
+                            <DatePicker label="End Date" value={endDate} onChange={setEndDate as any} format="DD.MM.YYYY" />
                         </DemoContainer>
                     </LocalizationProvider>
                     <Box>

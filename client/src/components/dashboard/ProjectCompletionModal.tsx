@@ -68,7 +68,7 @@ export default function ProjectCompletionModal({ open, onClose, completionData, 
                                 value={completionData.completionDate}
                                 onChange={(newValue) => setCompletionData({...completionData, completionDate: newValue})}
                                 disabled={readOnly}
-                                format="DD-MM-YYYY"
+                                format="DD.MM.YYYY"
                             />
                         </DemoContainer>
                     </LocalizationProvider>
