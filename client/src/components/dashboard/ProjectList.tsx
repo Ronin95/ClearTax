@@ -246,7 +246,7 @@ export default function ProjectList({ projects, showActions, isCommunityTab, onE
                                                 style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }} 
                                                 target="_blank" rel="noopener noreferrer"
                                             >
-                                                📎 Download {getFileName(file, idx)}
+                                                View {getFileName(file, idx)}
                                             </a>
                                         </Typography>
                                     ))}

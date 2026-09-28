@@ -151,65 +151,77 @@ export default function ProjectTimelineModal({ open, onClose, projectId }: Props
             </DialogContent>
             
             <Box sx={{ p: 2, bgcolor: 'background.paper', borderTop: '1px solid #e0e0e0' }}>
-                <Typography variant="subtitle2" gutterBottom>Post a new update:</Typography>
-                <TextField 
-                    multiline rows={2} fullWidth size="small"
-                    value={message} onChange={e => setMessage(e.target.value)} 
-                    placeholder="Type a new update..."
-                />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button variant="outlined" component="label" size="small">
-                            {image ? image.name : "Attach Image"}
-                            <input type="file" hidden accept="image/*" onChange={e => setImage(e.target.files ? e.target.files[0] : null)} />
-                        </Button>
-                        <Button variant="outlined" component="label" size="small" color="secondary">
-                            {pdf ? pdf.name : "Upload PDF"}
-                            <input type="file" hidden accept="application/pdf" onChange={e => setPdf(e.target.files ? e.target.files[0] : null)} />
-                        </Button>
+                {projectStatus === 'Completed' ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                        <Typography variant="subtitle1" fontWeight="bold" color="text.secondary">Timeline Sealed</Typography>
+                        <Typography variant="body2" color="text.secondary" align="center">
+                            This project is completed. The timeline is sealed for historical transparency.
+                        </Typography>
+                        <Button onClick={onClose} color="inherit" sx={{ mt: 2 }}>Close</Button>
                     </Box>
-                    <Box>
-                        <Button onClick={onClose} color="inherit" sx={{ mr: 1 }}>Close</Button>
-                        <Button 
-                            onClick={handleSubmit} 
-                            variant="contained" 
-                            color="primary" 
-                            disabled={submitting || (!message.trim() && !image && !pdf)}
-                        >
-                            {submitting ? 'Posting...' : 'Post Update'}
-                        </Button>
-                    </Box>
-                </Box>
-                
-                {isAssignedCompany && projectStatus === 'In Progress' && (
-                    <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed #ccc' }}>
-                        {!showRequestFunding ? (
-                            <Button variant="outlined" color="warning" onClick={() => setShowRequestFunding(true)} size="small">
-                                Request Extra Funding
-                            </Button>
-                        ) : (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                <Typography variant="subtitle2" color="warning.main">Request Additional Funding</Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    If you need more money to complete this project, you can pause it and ask the community for an extension.
-                                </Typography>
-                                <TextField 
-                                    label="Additional Amount Needed (€)" type="number" size="small" fullWidth
-                                    value={fundingAmount} onChange={e => setFundingAmount(e.target.value)}
-                                />
-                                <TextField 
-                                    label="Reason (Will be posted to timeline)" multiline rows={2} size="small" fullWidth
-                                    value={fundingReason} onChange={e => setFundingReason(e.target.value)}
-                                />
-                                <Box sx={{ display: 'flex', gap: 1 }}>
-                                    <Button onClick={() => setShowRequestFunding(false)} color="inherit" size="small">Cancel</Button>
-                                    <Button onClick={handleRequestFunding} variant="contained" color="warning" size="small" disabled={submitting || !fundingAmount || !fundingReason}>
-                                        Submit Request
+                ) : (
+                    <>
+                        <Typography variant="subtitle2" gutterBottom>Post a new update:</Typography>
+                        <TextField 
+                            multiline rows={2} fullWidth size="small"
+                            value={message} onChange={e => setMessage(e.target.value)} 
+                            placeholder="Type a new update..."
+                        />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button variant="outlined" component="label" size="small">
+                                    {image ? image.name : "Attach Image"}
+                                    <input type="file" hidden accept="image/*" onChange={e => setImage(e.target.files ? e.target.files[0] : null)} />
+                                </Button>
+                                <Button variant="outlined" component="label" size="small" color="secondary">
+                                    {pdf ? pdf.name : "Upload PDF"}
+                                    <input type="file" hidden accept="application/pdf" onChange={e => setPdf(e.target.files ? e.target.files[0] : null)} />
+                                </Button>
+                            </Box>
+                            <Box>
+                                <Button onClick={onClose} color="inherit" sx={{ mr: 1 }}>Close</Button>
+                                <Button 
+                                    onClick={handleSubmit} 
+                                    variant="contained" 
+                                    color="primary" 
+                                    disabled={submitting || (!message.trim() && !image && !pdf)}
+                                >
+                                    {submitting ? 'Posting...' : 'Post Update'}
+                                </Button>
+                            </Box>
+                        </Box>
+                        
+                        {isAssignedCompany && projectStatus === 'In Progress' && (
+                            <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed #ccc' }}>
+                                {!showRequestFunding ? (
+                                    <Button variant="outlined" color="warning" onClick={() => setShowRequestFunding(true)} size="small">
+                                        Request Extra Funding
                                     </Button>
-                                </Box>
+                                ) : (
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <Typography variant="subtitle2" color="warning.main">Request Additional Funding</Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            If you need more money to complete this project, you can pause it and ask the community for an extension.
+                                        </Typography>
+                                        <TextField 
+                                            label="Additional Amount Needed (€)" type="number" size="small" fullWidth
+                                            value={fundingAmount} onChange={e => setFundingAmount(e.target.value)}
+                                        />
+                                        <TextField 
+                                            label="Reason (Will be posted to timeline)" multiline rows={2} size="small" fullWidth
+                                            value={fundingReason} onChange={e => setFundingReason(e.target.value)}
+                                        />
+                                        <Box sx={{ display: 'flex', gap: 1 }}>
+                                            <Button onClick={() => setShowRequestFunding(false)} color="inherit" size="small">Cancel</Button>
+                                            <Button onClick={handleRequestFunding} variant="contained" color="warning" size="small" disabled={submitting || !fundingAmount || !fundingReason}>
+                                                Submit Request
+                                            </Button>
+                                        </Box>
+                                    </Box>
+                                )}
                             </Box>
                         )}
-                    </Box>
+                    </>
                 )}
             </Box>
         </Dialog>

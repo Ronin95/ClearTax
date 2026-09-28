@@ -1,12 +1,14 @@
 #!/bin/bash
 
+# Load environment variables
+if [ -f "$(dirname "$0")/../.env" ]; then
+    export $(grep -v '^#' "$(dirname "$0")/../.env" | xargs)
+fi
+
 # Navigate to the root directory
 cd $PATH_TO_CLEARTAX_FOLDER/ClearTax
 
 echo "🚀 Preparing to upload LoremIpsum.pdf to Garage S3..."
-
-# Automatically load all variables from .env file
-export $(grep -v '^#' .env | xargs)
 
 # Use 3910 because that is the Garage S3 API port exposed to Linux host
 ENDPOINT="http://localhost:3910" 

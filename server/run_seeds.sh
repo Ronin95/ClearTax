@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Load environment variables
+if [ -f "$(dirname "$0")/../.env" ]; then
+    export $(grep -v '^#' "$(dirname "$0")/../.env" | xargs)
+fi
+
 # Navigate to the correct directory just in case
 cd $PATH_TO_CLEARTAX_FOLDER/ClearTax/server
 

@@ -630,8 +630,13 @@ router.post('/:id/verify-completion', verifyToken, async (req, res) => {
                     INSERT INTO contributions (id, user_id, category_id, contributed_amount_by_user) 
                     VALUES (gen_random_uuid(), $1, 4, $2)
                 `, [userId, leftover]); 
+                
                 // 2. Adjust the project's amount_raised down to exactly match the final cost
                 await client.query("UPDATE open_problems SET amount_raised = $1 WHERE id = $2", [finalCost, projectId]);
+                
+                // 3. Add transparency message to the timeline
+                const systemMessage = `🏛️ **System Transparency Report**\nTotal amount raised was €${amountRaised.toLocaleString('de-AT')}, and because a smaller amount of €${finalCost.toLocaleString('de-AT')} was used to complete the project, the remaining €${leftover.toLocaleString('de-AT')} has been securely routed to pay off the National Debt.`;
+                await client.query("INSERT INTO project_updates (project_id, company_id, message) VALUES ($1, $2, $3)", [projectId, assignedCompanyId, systemMessage]);
             }
             // Once verified by the community, officially complete it!
             await client.query("UPDATE open_problems SET status = 'Completed' WHERE id = $1", [projectId]);

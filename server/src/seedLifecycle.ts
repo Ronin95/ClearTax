@@ -6,7 +6,7 @@ async function seedLifecycle() {
         console.log("🌱 Fetching users, companies, and projects...");
         const users = (await pool.query('SELECT id FROM users WHERE role_id = 1')).rows;
         const companies = (await pool.query('SELECT id FROM users WHERE role_id = 2')).rows;
-        const projects = (await pool.query('SELECT id, status FROM open_problems WHERE status != $1', ['Proposed'])).rows;
+        const projects = (await pool.query('SELECT id, status, target_funding, amount_raised FROM open_problems WHERE status != $1', ['Proposed'])).rows;
 
         if (companies.length === 0 || users.length === 0) {
             console.error("❌ You need regular users and companies to seed the lifecycle!");
@@ -25,6 +25,8 @@ async function seedLifecycle() {
             const biddingCompanies = faker.helpers.arrayElements(companies, numBids);
             
             let acceptedCompany = null;
+            const targetFunding = parseFloat(p.target_funding);
+            const amountRaised = parseFloat(p.amount_raised);
             
             for (let i = 0; i < biddingCompanies.length; i++) {
                 const comp = biddingCompanies[i];
@@ -33,12 +35,15 @@ async function seedLifecycle() {
                 
                 if (isWinner) acceptedCompany = comp.id;
 
+                // The winning bid's cost must match the project's target funding. Losing bids can be random.
+                const estimatedCost = isWinner ? targetFunding : faker.number.float({ min: targetFunding * 0.8, max: targetFunding * 1.5, fractionDigits: 2 });
+
                 await pool.query(`
                     INSERT INTO project_bids (project_id, company_id, estimated_cost, pitch, file_list, status)
                     VALUES ($1, $2, $3, $4, ARRAY['LoremIpsum.pdf'], $5)
                 `, [
                     p.id, comp.id, 
-                    faker.number.float({ min: 1000, max: 50000, fractionDigits: 2 }), 
+                    estimatedCost, 
                     faker.company.catchPhrase(),
                     bidStatus
                 ]);
@@ -63,6 +68,10 @@ async function seedLifecycle() {
 
             // If it's Pending Completion or Completed, insert a record into your new project_completions table!
             if (p.status === 'Pending Completion' || p.status === 'Completed') {
+                
+                // Final cost should be smaller than amount_raised to showcase the National Debt leftover feature!
+                const finalCost = faker.number.float({ min: amountRaised * 0.7, max: amountRaised - 100, fractionDigits: 2 });
+                
                 await pool.query(`
                     INSERT INTO project_completions (project_id, summary, final_cost, completion_date, rating, final_file_list)
                     VALUES ($1, $2, $3, NOW(), 5, ARRAY['LoremIpsum.pdf'])
@@ -70,7 +79,7 @@ async function seedLifecycle() {
                 `, [
                     p.id, 
                     faker.lorem.paragraph(), 
-                    faker.number.float({ min: 1000, max: 50000, fractionDigits: 2 })
+                    finalCost
                 ]);
                 completionsCount++;
                 

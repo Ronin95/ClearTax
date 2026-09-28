@@ -3,6 +3,11 @@
 # Exit immediately if any command fails
 set -e
 
+# Load environment variables
+if [ -f "$(dirname "$0")/.env" ]; then
+    export $(grep -v '^#' "$(dirname "$0")/.env" | xargs)
+fi
+
 echo "🚀 Initiating Data Setup..."
 
 # Navigate to the server directory

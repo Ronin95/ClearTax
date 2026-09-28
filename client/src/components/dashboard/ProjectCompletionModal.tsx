@@ -1,5 +1,6 @@
-import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, Rating, IconButton } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, Rating, IconButton, CircularProgress, Paper, Avatar } from '@mui/material';
+import axios from 'axios';
 import CloseIcon from '@mui/icons-material/Close';
 import { DemoContainer } from '@mui/x-date-pickers/internals/demo';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -8,6 +9,18 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Props } from '../../types/dashboardTypes';
 
 export default function ProjectCompletionModal({ open, onClose, completionData, setCompletionData, onSubmit, readOnly = false, project }: Props) {
+    const [updates, setUpdates] = useState<any[]>([]);
+    const [loadingUpdates, setLoadingUpdates] = useState(false);
+
+    useEffect(() => {
+        if (open && readOnly && project?.id) {
+            setLoadingUpdates(true);
+            axios.get(`http://localhost:3001/api/projects/${project.id}/updates`, { withCredentials: true })
+                .then(res => setUpdates(res.data.updates || []))
+                .catch(err => console.error("Failed to fetch timeline history", err))
+                .finally(() => setLoadingUpdates(false));
+        }
+    }, [open, readOnly, project?.id]);
     
     const getImageUrl = (img: any) => {
         if (img instanceof File) return URL.createObjectURL(img);
@@ -113,7 +126,7 @@ export default function ProjectCompletionModal({ open, onClose, completionData, 
                                 {completionData.finalFiles.map((file, idx) => (
                                     <Typography key={idx} variant="body2">
                                         <a href={getFileUrl(file)} download={getFileName(file, idx)} style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }} target="_blank" rel="noopener noreferrer">
-                                            📎 Download {getFileName(file, idx)}
+                                            View {getFileName(file, idx)}
                                         </a>
                                     </Typography>
                                 ))}
@@ -131,6 +144,62 @@ export default function ProjectCompletionModal({ open, onClose, completionData, 
                                 Upload PDFs
                                 <input type="file" hidden multiple accept="application/pdf" onChange={handleFileChange} />
                             </Button>
+                        </Box>
+                    )}
+
+                    {/* --- READ ONLY FINANCIALS & TIMELINE --- */}
+                    {readOnly && project && (
+                        <Box sx={{ mt: 4, borderTop: '2px solid #eee', pt: 3 }}>
+                            <Typography variant="h6" color="primary" gutterBottom>Project History & Financials</Typography>
+                            
+                            <Paper sx={{ p: 2, mb: 3, bgcolor: '#f1f8e9', border: '1px solid #c5e1a5' }}>
+                                <Typography variant="subtitle2" gutterBottom>Financial Breakdown</Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                    <Typography variant="body2">Total Raised from Community:</Typography>
+                                    <Typography variant="body2" fontWeight="bold">€{project.amount_raised}</Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                    <Typography variant="body2">Final Cost of Execution:</Typography>
+                                    <Typography variant="body2" fontWeight="bold" color="error">- €{completionData.finalCost}</Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1, pt: 1, borderTop: '1px dashed #c5e1a5' }}>
+                                    <Typography variant="body2" fontWeight="bold">Total Leftover (Sent to National Debt):</Typography>
+                                    <Typography variant="body2" fontWeight="bold" color="success.main">
+                                        €{Math.max(0, Number(project.amount_raised || 0) - Number(completionData.finalCost || 0)).toLocaleString()}
+                                    </Typography>
+                                </Box>
+                            </Paper>
+
+                            <Typography variant="subtitle2" gutterBottom>Official Timeline Log</Typography>
+                            <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1, maxHeight: 400, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                {loadingUpdates ? (
+                                    <Box display="flex" justifyContent="center" py={3}><CircularProgress size={24} /></Box>
+                                ) : updates.length === 0 ? (
+                                    <Typography color="text.secondary" align="center" variant="body2">No timeline updates were posted during this project.</Typography>
+                                ) : (
+                                    updates.map((update, idx) => (
+                                        <Paper key={idx} sx={{ p: 1.5, display: 'flex', gap: 1.5, borderLeft: '4px solid #1976d2' }}>
+                                            <Avatar sx={{ width: 32, height: 32, fontSize: '0.9rem' }}>{update.sender_name?.charAt(0).toUpperCase() || 'U'}</Avatar>
+                                            <Box sx={{ flex: 1 }}>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                                    <Typography variant="subtitle2" fontSize="0.85rem" fontWeight="bold">
+                                                        {update.sender_name || 'User'} 
+                                                        <Typography component="span" variant="caption" sx={{ ml: 1, color: 'primary.main' }}>
+                                                            ({update.sender_role || 'User'})
+                                                        </Typography>
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {new Date(update.created_at).toLocaleDateString()}
+                                                    </Typography>
+                                                </Box>
+                                                <Typography variant="body2" fontSize="0.85rem" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
+                                                    {update.message}
+                                                </Typography>
+                                            </Box>
+                                        </Paper>
+                                    ))
+                                )}
+                            </Box>
                         </Box>
                     )}
                 </Box>
