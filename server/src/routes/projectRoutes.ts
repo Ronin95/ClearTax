@@ -331,7 +331,7 @@ router.post('/:id/complete', verifyToken, upload.fields([{ name: 'finalImages', 
         const { summary, finalCost, completionDate, maintenanceNotes, rating } = req.body;
         
         // Security Check: Make sure they own the project and it's actually In Progress
-        const projectRes = await pool.query("SELECT * FROM open_problems WHERE id = $1 AND user_id = $2", [projectId, userId]);
+        const projectRes = await pool.query("SELECT * FROM open_problems WHERE id = $1 AND assigned_company_id = $2", [projectId, userId]);
         if (projectRes.rows.length === 0) return res.status(404).json({ error: "Project not found or unauthorized" });
         if (projectRes.rows[0].status !== 'In Progress') return res.status(400).json({ error: "Project must be 'In Progress' to complete" });
 
@@ -561,16 +561,30 @@ router.post('/:id/updates', verifyToken, upload.fields([{ name: 'image', maxCoun
 // GET: View Progress Updates (Public Action)
 router.get('/:id/updates', verifyToken, async (req, res) => {
     try {
-        // Join the users table to get the sender's name and role
+        const userId = (req as any).user?.id;
+        
         const result = await pool.query(`
-            SELECT u.*, us.username as sender_name, us.role as sender_role 
+            SELECT u.*, us.username as sender_name, ur.name as sender_role 
             FROM project_updates u 
             JOIN users us ON u.company_id = us.id 
+            LEFT JOIN user_roles ur ON us.role_id = ur.id
             WHERE u.project_id = $1 
             ORDER BY u.created_at ASC
         `, [req.params.id]);
-        res.json({ updates: result.rows });
-    } catch (err) { res.status(500).json({ error: 'Server error fetching updates' }); }
+        
+        const projectRes = await pool.query("SELECT assigned_company_id, status FROM open_problems WHERE id = $1", [req.params.id]);
+        let isAssignedCompany = false;
+        let projectStatus = '';
+        if (projectRes.rows.length > 0) {
+            isAssignedCompany = projectRes.rows[0].assigned_company_id === userId;
+            projectStatus = projectRes.rows[0].status;
+        }
+        
+        res.json({ updates: result.rows, isAssignedCompany, projectStatus });
+    } catch (err: any) { 
+        console.error("Error fetching updates:", err.message);
+        res.status(500).json({ error: 'Server error fetching updates: ' + err.message }); 
+    }
 });
 
 // POST: Verify Completion Sign-off (User Action)
@@ -592,7 +606,7 @@ router.post('/:id/verify-completion', verifyToken, async (req, res) => {
             
             // Fetch the actual FINAL COST from the company's completion report!
             const projectRes = await client.query(`
-                SELECT op.amount_raised, pc.final_cost 
+                SELECT op.amount_raised, op.assigned_company_id, pc.final_cost 
                 FROM open_problems op
                 JOIN project_completions pc ON op.id = pc.project_id
                 WHERE op.id = $1
@@ -600,6 +614,13 @@ router.post('/:id/verify-completion', verifyToken, async (req, res) => {
             
             const amountRaised = parseFloat(projectRes.rows[0].amount_raised);
             const finalCost = parseFloat(projectRes.rows[0].final_cost || '0');
+            const assignedCompanyId = projectRes.rows[0].assigned_company_id;
+            
+            // 0. Pay the company for their hard work!
+            if (assignedCompanyId && finalCost > 0) {
+                await client.query("UPDATE users SET available_amount = available_amount + $1 WHERE id = $2", [finalCost, assignedCompanyId]);
+            }
+
             // If they raised 100€ and the final cost was 25€, leftover is exactly 75€!
             if (amountRaised > finalCost) {
                 const leftover = amountRaised - finalCost;
@@ -623,6 +644,47 @@ router.post('/:id/verify-completion', verifyToken, async (req, res) => {
         res.status(500).json({ error: 'Server error verifying completion' }); 
     } finally {
         client.release();
+    }
+});
+
+// POST: Request Additional Funding (Company Action)
+router.post('/:id/request-funding', verifyToken, async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        const companyId = (req as any).user.id;
+        const { additionalAmount, reason } = req.body;
+        
+        const parsedAmount = parseFloat(additionalAmount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ error: "Invalid amount" });
+        }
+        
+        // 1. Verify this company actually owns this project and it's in progress
+        const projectRes = await pool.query("SELECT * FROM open_problems WHERE id = $1 AND assigned_company_id = $2 AND status = 'In Progress'", [projectId, companyId]);
+        if (projectRes.rows.length === 0) {
+            return res.status(404).json({ error: "Project not found, not assigned to you, or not In Progress" });
+        }
+        
+        const currentTarget = parseFloat(projectRes.rows[0].target_funding);
+        const newTarget = currentTarget + parsedAmount;
+        
+        // 2. Add an update to the timeline so the community knows why!
+        const message = `⚠️ Requested Additional Funding: €${parsedAmount}\n\nReason: ${reason || 'Unexpected costs'}`;
+        await pool.query(
+            "INSERT INTO project_updates (project_id, company_id, message) VALUES ($1, $2, $3)", 
+            [projectId, companyId, message]
+        );
+        
+        // 3. Update the project: increase target_funding and change status
+        await pool.query(
+            "UPDATE open_problems SET target_funding = $1, status = 'Funding Extension' WHERE id = $2", 
+            [newTarget, projectId]
+        );
+        
+        res.json({ message: "Successfully requested additional funding" });
+    } catch (err) {
+        console.error("Error requesting funding:", err);
+        res.status(500).json({ error: "Server error requesting funding" });
     }
 });
 

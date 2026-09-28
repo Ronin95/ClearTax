@@ -6,7 +6,7 @@ set -e
 echo "🚀 Initiating Data Setup..."
 
 # Navigate to the server directory
-cd /home/ronin/Documents/ClearTax/server
+cd $PATH_TO_CLEARTAX_FOLDER/ClearTax/server
 
 echo "▶️ Running create_garage_setup.sh..."
 ./create_garage_setup.sh

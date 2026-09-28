@@ -17,6 +17,13 @@ export default function ProjectTimelineModal({ open, onClose, projectId }: Props
     const [image, setImage] = useState<File | null>(null);
     const [pdf, setPdf] = useState<File | null>(null); // NEW PDF STATE
     const [submitting, setSubmitting] = useState(false);
+    
+    // Extra Funding States
+    const [isAssignedCompany, setIsAssignedCompany] = useState(false);
+    const [projectStatus, setProjectStatus] = useState('');
+    const [showRequestFunding, setShowRequestFunding] = useState(false);
+    const [fundingAmount, setFundingAmount] = useState('');
+    const [fundingReason, setFundingReason] = useState('');
 
     useEffect(() => {
         if (open && projectId) {
@@ -29,6 +36,8 @@ export default function ProjectTimelineModal({ open, onClose, projectId }: Props
         try {
             const res = await axios.get(`http://localhost:3001/api/projects/${projectId}/updates`, { withCredentials: true });
             setUpdates(res.data.updates);
+            setIsAssignedCompany(res.data.isAssignedCompany);
+            setProjectStatus(res.data.projectStatus);
         } catch (error) {
             console.error("Failed to fetch updates", error);
         } finally {
@@ -60,6 +69,28 @@ export default function ProjectTimelineModal({ open, onClose, projectId }: Props
         }
     };
 
+    const handleRequestFunding = async () => {
+        if (!fundingAmount || !fundingReason || !projectId) return;
+        setSubmitting(true);
+        try {
+            await axios.post(`http://localhost:3001/api/projects/${projectId}/request-funding`, {
+                additionalAmount: fundingAmount,
+                reason: fundingReason
+            }, { withCredentials: true });
+            
+            setShowRequestFunding(false);
+            setFundingAmount('');
+            setFundingReason('');
+            fetchUpdates(); // Refresh the list immediately!
+            // Note: Project status is now Funding Extension, so it will hide the UI upon refresh.
+        } catch (err) {
+            console.error("Failed to request funding", err);
+            alert("Failed to request funding");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle>Project Updates Timeline</DialogTitle>
@@ -83,7 +114,7 @@ export default function ProjectTimelineModal({ open, onClose, projectId }: Props
                                             </Typography>
                                         </Typography>
                                         <Typography variant="caption" color="text.secondary">
-                                            {new Date(update.created_at).toLocaleDateString()}
+                                            {new Date(update.created_at).toLocaleDateString('de-AT', { year: 'numeric', month: 'short', day: 'numeric' })}
                                         </Typography>
                                     </Box>
                                     <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
@@ -149,6 +180,37 @@ export default function ProjectTimelineModal({ open, onClose, projectId }: Props
                         </Button>
                     </Box>
                 </Box>
+                
+                {isAssignedCompany && projectStatus === 'In Progress' && (
+                    <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed #ccc' }}>
+                        {!showRequestFunding ? (
+                            <Button variant="outlined" color="warning" onClick={() => setShowRequestFunding(true)} size="small">
+                                Request Extra Funding
+                            </Button>
+                        ) : (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <Typography variant="subtitle2" color="warning.main">Request Additional Funding</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    If you need more money to complete this project, you can pause it and ask the community for an extension.
+                                </Typography>
+                                <TextField 
+                                    label="Additional Amount Needed (€)" type="number" size="small" fullWidth
+                                    value={fundingAmount} onChange={e => setFundingAmount(e.target.value)}
+                                />
+                                <TextField 
+                                    label="Reason (Will be posted to timeline)" multiline rows={2} size="small" fullWidth
+                                    value={fundingReason} onChange={e => setFundingReason(e.target.value)}
+                                />
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Button onClick={() => setShowRequestFunding(false)} color="inherit" size="small">Cancel</Button>
+                                    <Button onClick={handleRequestFunding} variant="contained" color="warning" size="small" disabled={submitting || !fundingAmount || !fundingReason}>
+                                        Submit Request
+                                    </Button>
+                                </Box>
+                            </Box>
+                        )}
+                    </Box>
+                )}
             </Box>
         </Dialog>
     );

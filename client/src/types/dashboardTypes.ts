@@ -116,4 +116,5 @@ export interface Props {
     setCompletionData: (data: CompletionData) => void;
     onSubmit: () => void;
     readOnly?: boolean;
+    project?: ProjectData | null;
 }

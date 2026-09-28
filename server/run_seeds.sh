@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Navigate to the correct directory just in case
-cd /home/ronin/Documents/ClearTax/server
+cd $PATH_TO_CLEARTAX_FOLDER/ClearTax/server
 
 echo 'Running seedUsersRegular.ts...'
 docker exec -it cleartax_nodejs node --experimental-strip-types src/seedUsersRegular.ts

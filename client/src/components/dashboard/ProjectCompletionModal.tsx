@@ -7,7 +7,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Props } from '../../types/dashboardTypes';
 
-export default function ProjectCompletionModal({ open, onClose, completionData, setCompletionData, onSubmit, readOnly = false }: Props) {
+export default function ProjectCompletionModal({ open, onClose, completionData, setCompletionData, onSubmit, readOnly = false, project }: Props) {
     
     const getImageUrl = (img: any) => {
         if (img instanceof File) return URL.createObjectURL(img);
@@ -60,6 +60,10 @@ export default function ProjectCompletionModal({ open, onClose, completionData, 
                         value={completionData.finalCost} 
                         onChange={e => setCompletionData({...completionData, finalCost: e.target.value})} 
                         disabled={readOnly}
+                        error={!readOnly && !!project && parseFloat(completionData.finalCost || '0') > parseFloat(project.amount_raised?.toString() || '0')}
+                        helperText={!readOnly && !!project && parseFloat(completionData.finalCost || '0') > parseFloat(project.amount_raised?.toString() || '0') 
+                            ? `Final cost cannot exceed the total raised funds (€${project.amount_raised}). Please Request Additional Funding via the timeline first.`
+                            : ''}
                     />
                     <LocalizationProvider dateAdapter={AdapterDayjs}>
                         <DemoContainer components={['DatePicker']}>
@@ -136,7 +140,12 @@ export default function ProjectCompletionModal({ open, onClose, completionData, 
                     {readOnly ? "Close Report" : "Cancel"}
                 </Button>
                 {!readOnly && (
-                    <Button onClick={onSubmit} variant="contained" color="success">
+                    <Button 
+                        onClick={onSubmit} 
+                        variant="contained" 
+                        color="success"
+                        disabled={!!project && parseFloat(completionData.finalCost || '0') > parseFloat(project.amount_raised?.toString() || '0')}
+                    >
                         Submit Completion Report
                     </Button>
                 )}

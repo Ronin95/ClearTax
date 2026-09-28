@@ -511,6 +511,8 @@ export default function RegularDashboard() {
                         onViewCompletion={(id) => handleOpenCompletionModal(id, true)}
                         getStatusColor={getStatusColor} 
                         formatDate={formatDate} 
+                        onVerifyCompletion={handleVerifyCompletion}
+                        onViewUpdates={handleOpenUpdates}
                     />
                     {communityTotalPages > 1 && (
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>

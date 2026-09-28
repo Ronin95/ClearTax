@@ -1,21 +1,21 @@
 #!/bin/bash
 
 # Navigate to the root directory
-cd /home/ronin/Documents/ClearTax
+cd $PATH_TO_CLEARTAX_FOLDER/ClearTax
 
 echo "🚀 Preparing to upload LoremIpsum.pdf to Garage S3..."
 
-# Automatically load all variables from your .env file
+# Automatically load all variables from .env file
 export $(grep -v '^#' .env | xargs)
 
-# We use 3910 because that is the Garage S3 API port exposed to your Linux host
+# Use 3910 because that is the Garage S3 API port exposed to Linux host
 ENDPOINT="http://localhost:3910" 
 BUCKET="cleartax-file-uploads"
 
 echo "📤 Uploading LoremIpsum.pdf to s3://$BUCKET/LoremIpsum.pdf using Docker..."
 
 # Run the official AWS CLI inside a temporary, disposable Docker container!
-# We mount your current folder so the container can physically see LoremIpsum.pdf
+# Mount the current folder so the container can physically see LoremIpsum.pdf
 docker run --rm --network host \
   -e AWS_ACCESS_KEY_ID=$GARAGE_ACCESS_KEY \
   -e AWS_SECRET_ACCESS_KEY=$GARAGE_SECRET_KEY \
