@@ -43,7 +43,7 @@ docker compose up -d --build
 
 ####################### postgres
 1. Open the Registration Dialog
-Log in to pgAdmin at http://localhost:5050.
+Log in to pgAdmin at http://localhost:5055.
 
 Right-click on Servers in the left-hand browser menu.
 

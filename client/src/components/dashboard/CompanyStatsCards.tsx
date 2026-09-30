@@ -4,15 +4,16 @@ import EuroIcon from '@mui/icons-material/Euro';
 import BuildIcon from '@mui/icons-material/Build';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
-import { ProjectData } from '../../types/dashboardTypes';
+import { ProjectData, User } from '../../types/dashboardTypes';
 
 interface Props {
+    user: User | null;
     portfolioProjects: ProjectData[];
     activeProjects: ProjectData[];
 }
 
-export default function CompanyStatsCards({ portfolioProjects, activeProjects }: Props) {
-    const totalEarnings = portfolioProjects.reduce((sum, p) => sum + Number(p.amount_raised || 0), 0);
+export default function CompanyStatsCards({ user, portfolioProjects, activeProjects }: Props) {
+    const totalEarnings = Number(user?.available_amount || 0);
     const avgContractValue = portfolioProjects.length > 0 ? totalEarnings / portfolioProjects.length : 0;
 
     return (

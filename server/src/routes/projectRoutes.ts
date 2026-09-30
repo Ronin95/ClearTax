@@ -47,7 +47,7 @@ router.get('/', verifyToken, async (req, res) => {
         const userId = (req as any).user?.id;
         if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-        const projects = await pool.query('SELECT * FROM open_problems WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+        const projects = await pool.query('SELECT op.*, ps.name AS status FROM open_problems op LEFT JOIN project_statuses ps ON op.status_id = ps.id WHERE op.user_id = $1 ORDER BY op.created_at DESC', [userId]);
         res.json({ projects: projects.rows });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch projects' });
@@ -90,8 +90,8 @@ router.post('/', verifyToken, upload.fields([{ name: 'images', maxCount: 10 }, {
         const projectId = crypto.randomUUID();
         await pool.query(
             `INSERT INTO open_problems 
-            (id, user_id, category_id, project_name, summar_desc, image_list, file_list, latitude, longitude, amount_raised, target_funding, creator_work, status) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            (id, user_id, category_id, project_name, summar_desc, image_list, file_list, latitude, longitude, amount_raised, target_funding, creator_work, status_id) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, (SELECT id FROM project_statuses WHERE name = $13))`,
             [
                 projectId, 
                 userId, 
@@ -122,7 +122,7 @@ router.put('/:id', verifyToken, upload.fields([{ name: 'images', maxCount: 10 },
         const userId = (req as any).user?.id;
         const projectId = req.params.id;
 
-        const projectRes = await pool.query('SELECT * FROM open_problems WHERE id = $1 AND user_id = $2', [projectId, userId]);
+        const projectRes = await pool.query('SELECT op.*, ps.name AS status FROM open_problems op LEFT JOIN project_statuses ps ON op.status_id = ps.id WHERE op.id = $1 AND op.user_id = $2', [projectId, userId]);
         if (projectRes.rows.length === 0) return res.status(404).json({ error: "Project not found" });
         const oldProject = projectRes.rows[0];
 
@@ -155,7 +155,7 @@ router.put('/:id', verifyToken, upload.fields([{ name: 'images', maxCount: 10 },
             `UPDATE open_problems SET 
                 category_id = $1, project_name = $2, summar_desc = $3, 
                 image_list = $4, file_list = $5, latitude = $6, longitude = $7, 
-                amount_raised = $8, target_funding = $9, creator_work = $10, status = $11
+                amount_raised = $8, target_funding = $9, creator_work = $10, status_id = (SELECT id FROM project_statuses WHERE name = $11)
             WHERE id = $12`,
             [
                 parseInt(category_id) || 1, title, description, finalImageList, finalFileList, 
@@ -178,7 +178,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
         const userId = (req as any).user?.id;
         const projectId = req.params.id;
 
-        const projectRes = await pool.query('SELECT * FROM open_problems WHERE id = $1 AND user_id = $2', [projectId, userId]);
+        const projectRes = await pool.query('SELECT op.*, ps.name AS status FROM open_problems op LEFT JOIN project_statuses ps ON op.status_id = ps.id WHERE op.id = $1 AND op.user_id = $2', [projectId, userId]);
         if (projectRes.rows.length === 0) return res.status(404).json({ error: "Project not found or you don't have permission" });
         const project = projectRes.rows[0];
 
@@ -213,10 +213,11 @@ router.get('/community', verifyToken, async (req, res) => {
         const userId = (req as any).user?.id;
         if (!userId) return res.status(401).json({ error: "Unauthorized" });
         const projects = await pool.query(`
-            SELECT op.*, 
+            SELECT op.*, ps.name AS status, 
                    CAST((SELECT COUNT(*) FROM project_approvals WHERE project_id = op.id) AS INTEGER) as approval_count,
                    EXISTS(SELECT 1 FROM project_approvals WHERE project_id = op.id AND user_id = $1) as has_approved
             FROM open_problems op
+            LEFT JOIN project_statuses ps ON op.status_id = ps.id
             ORDER BY op.created_at DESC
         `, [userId]);
         res.json({ projects: projects.rows });
@@ -281,7 +282,7 @@ router.post('/:id/approve', verifyToken, upload.array('files'), async (req, res)
             `, [projectId, userId, comment, uploadedFileNames, fundAmount]);
 
             // 6. Check if Funding Goal is Met!
-            const projRes = await client.query('SELECT amount_raised, target_funding, assigned_company_id, status FROM open_problems WHERE id = $1', [projectId]);
+            const projRes = await client.query('SELECT op.amount_raised, op.target_funding, op.assigned_company_id, ps.name AS status FROM open_problems op LEFT JOIN project_statuses ps ON op.status_id = ps.id WHERE op.id = $1', [projectId]);
             
             if (projRes.rows.length > 0) {
                 const currentRaised = parseFloat(projRes.rows[0].amount_raised || '0');
@@ -292,9 +293,9 @@ router.post('/:id/approve', verifyToken, upload.array('files'), async (req, res)
                 // If it met or exceeded the goal, update the status!
                 if (currentRaised >= targetGoal) {
                     if (assignedCompanyId && currentStatus === 'Funding Extension') {
-                        await client.query(`UPDATE open_problems SET status = 'In Progress' WHERE id = $1`, [projectId]);
+                        await client.query(`UPDATE open_problems SET status_id = (SELECT id FROM project_statuses WHERE name = 'In Progress') WHERE id = $1`, [projectId]);
                     } else if (currentStatus === 'Proposed') {
-                        await client.query(`UPDATE open_problems SET status = 'Funding Approved' WHERE id = $1`, [projectId]); 
+                        await client.query(`UPDATE open_problems SET status_id = (SELECT id FROM project_statuses WHERE name = 'Funding Approved') WHERE id = $1`, [projectId]); 
                     }
                 }
             }
@@ -331,7 +332,7 @@ router.post('/:id/complete', verifyToken, upload.fields([{ name: 'finalImages', 
         const { summary, finalCost, completionDate, maintenanceNotes, rating } = req.body;
         
         // Security Check: Make sure they own the project and it's actually In Progress
-        const projectRes = await pool.query("SELECT * FROM open_problems WHERE id = $1 AND assigned_company_id = $2", [projectId, userId]);
+        const projectRes = await pool.query("SELECT op.*, ps.name AS status FROM open_problems op LEFT JOIN project_statuses ps ON op.status_id = ps.id WHERE op.id = $1 AND op.assigned_company_id = $2", [projectId, userId]);
         if (projectRes.rows.length === 0) return res.status(404).json({ error: "Project not found or unauthorized" });
         if (projectRes.rows[0].status !== 'In Progress') return res.status(400).json({ error: "Project must be 'In Progress' to complete" });
 
@@ -369,7 +370,7 @@ router.post('/:id/complete', verifyToken, upload.fields([{ name: 'finalImages', 
         );
 
         // 2. Change the project status to Completed
-        await pool.query("UPDATE open_problems SET status = 'Pending Completion' WHERE id = $1", [projectId]);
+        await pool.query("UPDATE open_problems SET status_id = (SELECT id FROM project_statuses WHERE name = 'Pending Completion') WHERE id = $1", [projectId]);
 
         res.status(200).json({ message: 'Project completed successfully' });
     } catch (error) {
@@ -398,7 +399,7 @@ router.get('/:id/completion', verifyToken, async (req, res) => {
 // GET: Tender Board (Approved projects looking for a company)
 router.get('/tender-board', verifyToken, async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM open_problems WHERE status = 'Funding Approved' AND assigned_company_id IS NULL ORDER BY created_at DESC");
+        const result = await pool.query("SELECT op.*, ps.name AS status FROM open_problems op LEFT JOIN project_statuses ps ON op.status_id = ps.id WHERE ps.name = 'Funding Approved' AND op.assigned_company_id IS NULL ORDER BY op.created_at DESC");
         res.json({ projects: result.rows });
     } catch (err) { res.status(500).json({ error: 'Server error fetching tender board' }); }
 });
@@ -422,8 +423,9 @@ router.get('/my-contracts', verifyToken, async (req, res) => {
         const companyId = (req as any).user.id;
         
         const result = await pool.query(`
-            SELECT p.* 
+            SELECT p.*, ps.name AS status 
             FROM open_problems p
+            LEFT JOIN project_statuses ps ON p.status_id = ps.id
             JOIN project_bids b ON p.id = b.project_id
             WHERE b.company_id = $1 AND b.status = 'Accepted'
             ORDER BY p.created_at DESC
@@ -508,14 +510,14 @@ router.post('/:id/accept-bid', verifyToken, async (req, res) => {
         if (estimatedCost > amountRaised) {
             // Deficit! Project needs more money before it can start.
             await pool.query(
-                "UPDATE open_problems SET assigned_company_id = $1, status = 'Funding Extension', target_funding = $2 WHERE id = $3", 
+                "UPDATE open_problems SET assigned_company_id = $1, status_id = (SELECT id FROM project_statuses WHERE name = 'Funding Extension'), target_funding = $2 WHERE id = $3", 
                 [companyId, estimatedCost, projectId]
             );
             res.json({ message: "Bid accepted. Project requires additional funding to proceed." });
         } else {
             // Fully funded! Go straight to In Progress.
             await pool.query(
-                "UPDATE open_problems SET assigned_company_id = $1, status = 'In Progress' WHERE id = $2", 
+                "UPDATE open_problems SET assigned_company_id = $1, status_id = (SELECT id FROM project_statuses WHERE name = 'In Progress') WHERE id = $2", 
                 [companyId, projectId]
             );
             res.json({ message: "Bid accepted. Project is now In Progress!" });
@@ -572,7 +574,7 @@ router.get('/:id/updates', verifyToken, async (req, res) => {
             ORDER BY u.created_at ASC
         `, [req.params.id]);
         
-        const projectRes = await pool.query("SELECT assigned_company_id, status FROM open_problems WHERE id = $1", [req.params.id]);
+        const projectRes = await pool.query("SELECT op.assigned_company_id, ps.name AS status FROM open_problems op LEFT JOIN project_statuses ps ON op.status_id = ps.id WHERE op.id = $1", [req.params.id]);
         let isAssignedCompany = false;
         let projectStatus = '';
         if (projectRes.rows.length > 0) {
@@ -639,7 +641,7 @@ router.post('/:id/verify-completion', verifyToken, async (req, res) => {
                 await client.query("INSERT INTO project_updates (project_id, company_id, message) VALUES ($1, $2, $3)", [projectId, assignedCompanyId, systemMessage]);
             }
             // Once verified by the community, officially complete it!
-            await client.query("UPDATE open_problems SET status = 'Completed' WHERE id = $1", [projectId]);
+            await client.query("UPDATE open_problems SET status_id = (SELECT id FROM project_statuses WHERE name = 'Completed') WHERE id = $1", [projectId]);
         }
         
         await client.query('COMMIT');
@@ -665,7 +667,7 @@ router.post('/:id/request-funding', verifyToken, async (req, res) => {
         }
         
         // 1. Verify this company actually owns this project and it's in progress
-        const projectRes = await pool.query("SELECT * FROM open_problems WHERE id = $1 AND assigned_company_id = $2 AND status = 'In Progress'", [projectId, companyId]);
+        const projectRes = await pool.query("SELECT op.*, ps.name AS status FROM open_problems op LEFT JOIN project_statuses ps ON op.status_id = ps.id WHERE op.id = $1 AND op.assigned_company_id = $2 AND ps.name = 'In Progress'", [projectId, companyId]);
         if (projectRes.rows.length === 0) {
             return res.status(404).json({ error: "Project not found, not assigned to you, or not In Progress" });
         }
@@ -682,7 +684,7 @@ router.post('/:id/request-funding', verifyToken, async (req, res) => {
         
         // 3. Update the project: increase target_funding and change status
         await pool.query(
-            "UPDATE open_problems SET target_funding = $1, status = 'Funding Extension' WHERE id = $2", 
+            "UPDATE open_problems SET target_funding = $1, status_id = (SELECT id FROM project_statuses WHERE name = 'Funding Extension') WHERE id = $2", 
             [newTarget, projectId]
         );
         

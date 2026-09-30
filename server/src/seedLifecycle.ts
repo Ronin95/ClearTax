@@ -5,8 +5,9 @@ async function seedLifecycle() {
     try {
         console.log("🌱 Fetching users, companies, and projects...");
         const users = (await pool.query('SELECT id FROM users WHERE role_id = 1')).rows;
-        const companies = (await pool.query('SELECT id FROM users WHERE role_id = 2')).rows;
-        const projects = (await pool.query('SELECT id, status, target_funding, amount_raised FROM open_problems WHERE status != $1', ['Proposed'])).rows;
+        // Fetch only 10 companies so they get a high density of projects to show on their dashboard
+        const companies = (await pool.query('SELECT id FROM users WHERE role_id = 2 ORDER BY created_at ASC LIMIT 10')).rows;
+        const projects = (await pool.query('SELECT op.id, ps.name AS status, op.target_funding, op.amount_raised FROM open_problems op JOIN project_statuses ps ON op.status_id = ps.id WHERE ps.name != $1', ['Proposed'])).rows;
 
         if (companies.length === 0 || users.length === 0) {
             console.error("❌ You need regular users and companies to seed the lifecycle!");
@@ -81,6 +82,9 @@ async function seedLifecycle() {
                     faker.lorem.paragraph(), 
                     finalCost
                 ]);
+                
+                // ✅ PAY THE COMPANY so their Total Earnings dashboard metric actually updates!
+                await pool.query(`UPDATE users SET available_amount = available_amount + $1 WHERE id = $2`, [finalCost, acceptedCompany]);
                 completionsCount++;
                 
                 // If it's completely Completed, it also needs 3 community approvals!

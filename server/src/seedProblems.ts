@@ -192,9 +192,8 @@ async function seedProblems() {
             .map(r => r.id)
             .filter(id => id in templates); 
 
-        // NEW: Fetch all valid status names directly from the database table
-        const statusesRes = await pool.query("SELECT name FROM project_statuses WHERE name != 'Funding Extension';");
-        const dbStatuses = statusesRes.rows.map(r => r.name);
+        const statusesRes = await pool.query("SELECT id, name FROM project_statuses WHERE name != 'Funding Extension';");
+        const dbStatuses = statusesRes.rows;
 
         if (dbStatuses.length === 0) {
             console.error("❌ ERROR: No statuses found in project_statuses table. Did you update initDB?");
@@ -234,14 +233,16 @@ async function seedProblems() {
 
                 const targetFunding = faker.number.float({ min: 2500, max: 15000, fractionDigits: 2 });
                 const creatorWork = faker.datatype.boolean();
-                const status = faker.helpers.arrayElement(dbStatuses);
+                const statusObj = faker.helpers.arrayElement(dbStatuses);
+                const statusName = statusObj.name;
+                const statusId = statusObj.id;
 
                 // Dynamically calculate amountRaised based on the randomly selected Status!
                 let amountRaised = 0;
-                if (status === 'Proposed' || status === 'Rejected') {
+                if (statusName === 'Proposed' || statusName === 'Rejected') {
                     // Not fully funded yet (guaranteed to be below target)
                     amountRaised = faker.number.float({ min: 0, max: targetFunding - 1, fractionDigits: 2 });
-                } else if (status === 'Completed') {
+                } else if (statusName === 'Completed') {
                     // NO LEFTOVER MONEY! Excess was automatically sent to the National Debt!
                     amountRaised = targetFunding;
                 } else {
@@ -256,12 +257,12 @@ async function seedProblems() {
                     `INSERT INTO open_problems (
                         id, user_id, category_id, project_name, summar_desc, 
                         image_list, file_list, latitude, longitude, 
-                        amount_raised, target_funding, creator_work, status, created_at
+                        amount_raised, target_funding, creator_work, status_id, created_at
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
                     [
                         id, randomUser.id, categoryId, projectName, summarDesc, 
                         [], [], latitude, longitude, amountRaised, targetFunding, creatorWork, 
-                        status, problemDate
+                        statusId, problemDate
                     ]
                 );
             }

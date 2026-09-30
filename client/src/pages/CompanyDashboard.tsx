@@ -200,7 +200,7 @@ export default function CompanyDashboard() {
                 <Typography color="text.secondary">Welcome, {user?.company_name || user?.username}. Browse tenders and manage active contracts.</Typography>
             </Box>
 
-            <CompanyStatsCards portfolioProjects={portfolioProjects} activeProjects={activeProjects} />
+            <CompanyStatsCards user={user} portfolioProjects={portfolioProjects} activeProjects={activeProjects} />
 
             <section style={{ marginTop: '40px' }}>
                 <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>

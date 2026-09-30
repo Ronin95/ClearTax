@@ -67,7 +67,8 @@ export async function initDB() {
                 company_name VARCHAR(256) NULL,
                 available_amount DECIMAL(12, 2) DEFAULT 0.00,
                 contributed_amount DECIMAL(12, 2) DEFAULT 0.00,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
@@ -110,7 +111,8 @@ export async function initDB() {
                 user_id UUID REFERENCES users(id),
                 category_id INTEGER REFERENCES funding_categories(id),
                 contributed_amount_by_user DECIMAL(12, 2), 
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
         
@@ -130,9 +132,10 @@ export async function initDB() {
                 amount_raised DECIMAL(12, 2) DEFAULT 0.00,
                 target_funding DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
                 creator_work BOOLEAN DEFAULT false,
-                status VARCHAR(50) REFERENCES project_statuses(name),
+                status_id INTEGER REFERENCES project_statuses(id),
                 assigned_company_id UUID REFERENCES users(id),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
@@ -147,7 +150,8 @@ export async function initDB() {
                 pitch TEXT NOT NULL,
                 file_list TEXT[] DEFAULT '{}',
                 status VARCHAR(50) DEFAULT 'Pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
@@ -196,6 +200,15 @@ export async function initDB() {
                 final_file_list TEXT[] DEFAULT '{}',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+        `);
+
+        await pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_open_problems_user_id ON open_problems(user_id);
+            CREATE INDEX IF NOT EXISTS idx_open_problems_company_id ON open_problems(assigned_company_id);
+            CREATE INDEX IF NOT EXISTS idx_open_problems_status ON open_problems(status_id);
+            CREATE INDEX IF NOT EXISTS idx_project_bids_project_id ON project_bids(project_id);
+            CREATE INDEX IF NOT EXISTS idx_project_bids_company_id ON project_bids(company_id);
+            CREATE INDEX IF NOT EXISTS idx_project_updates_project_id ON project_updates(project_id);
         `);
 
         client.release();
